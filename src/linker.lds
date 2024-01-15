@@ -4,6 +4,7 @@ BASE_ADDRESS = 0x80200000;
 STACK_SIZE   = 4096 * 16;
 SECTIONS {
     . = BASE_ADDRESS;
+    kernel_start =  .;
     .text : {
 	*(.text.entry)
 	*(.text .text.*)    
@@ -21,12 +22,14 @@ SECTIONS {
     .srodata : {
 	*(.srodata .srodata.*)
     } 
+    . = ALIGN(4K);
      .data : {
 	*(.data .data.*)    
     }
     .sdata : {
 	*(.sdata .sdata.*)
     }
+    . = ALIGN(4K);
     .bss : {
 	*(.bss .bss.*)
     }
@@ -38,5 +41,7 @@ SECTIONS {
 	*(.comment)
 	*(.eh_frame) 
     }
+    kernel_end = .;
+    .  = ALIGN(4K);
 }
 

@@ -3,8 +3,10 @@
 
 mod console;
 mod sbi;
+mod mm;
 use core::arch::global_asm;
 use core::arch::asm;
+
 #[no_mangle]
 pub fn rust_main() {
     let i1 : i32 = 100;
@@ -13,7 +15,6 @@ pub fn rust_main() {
     for i in i3 {
         print!("{}\n",i);
     }
-
     unsafe {
         let sp : usize;
         asm!("mv {},sp",out(reg) sp);
