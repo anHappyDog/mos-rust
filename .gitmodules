@@ -1,0 +1,8 @@
+[submodule "lib/mips32"]
+	branch = main
+[submodule "lib/sync"]
+	branch = main
+[submodule "lib/elf"]
+	branch = main
+[submodule "lib/buddy"]
+	branch = main
