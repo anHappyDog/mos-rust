@@ -5,6 +5,11 @@
 
 extern crate core;
 
+mod dev;
+mod mm;
+mod proc;
+mod trap;
+
 use core::{arch, panic};
 
 #[naked]
@@ -12,8 +17,11 @@ use core::{arch, panic};
 #[link_section = ".text.boot"]
 extern "C" fn _start() -> ! {
     unsafe {
-        arch::asm!("\tnop\r\n
-        \tjal _init", options(noreturn));
+        arch::asm!(
+            "\tla $sp,stack_end\r\n
+             \tjal   _init\r\n",
+            options(noreturn)
+        );
     }
 }
 
@@ -24,6 +32,6 @@ extern "C" fn _init(mem_sz: usize) -> ! {
 }
 
 #[panic_handler]
-fn pp(_info: &panic::PanicInfo) -> ! {
+fn panic(_info: &panic::PanicInfo) -> ! {
     unreachable!("This sentence will never be printed.");
 }

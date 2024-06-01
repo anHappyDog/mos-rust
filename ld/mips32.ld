@@ -28,6 +28,7 @@ SECTIONS {
 	.stack (NOLOAD) :  {
 		. += STACK_SIZE;
 	}
+	stack_end = .;
 	/DISCARD/ : {
 		*(.comment)
 		*(.eh_frame)

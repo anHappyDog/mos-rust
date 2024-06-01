@@ -1,5 +1,12 @@
 [build]
 target = "./cfg/mips32.json"
 
+
 [target.mips32]
-rustflags = ["-C", "link-arg=-Tld/mips32.ld"]
+rustflags = ["-C", "link-args=-Tld/mips32.ld"]
+runner = "qemu-system-mipsel -M malta -m 256M -nographic -kernel"
+
+
+[unstable]
+mtime-on-use = true
+build-std = ["core", "alloc"]

@@ -7,14 +7,18 @@ build = "build.rs"
 [dependencies]
 bitflags = "2.5.0"
 buddy = { path = "./lib/buddy" }
-mips32 = { path = "./lib/mips" }
+mips32 = { path = "./lib/mips32" }
 elf = { path = "./lib/elf" }
 sync = { path = "./lib/sync" }
+
+[build-dependencies]
+cc = "1.0.98"
 
 
 [[bin]]
 name = "mos-6502"
 path = "./kernel/boot.rs"
+
 
 [profile.release]
 lto = true
@@ -24,3 +28,4 @@ lto = false
 codegen-units = 1
 debug = true
 panic = "abort"
+

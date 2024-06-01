@@ -16,9 +16,6 @@
     "std": null,
     "tier": null
   },
-  "pre-link-args": {
-    "gcc": ["-T", "./ld/mips32.ld"]
-  },
   "panic-strategy": "abort",
   "relocation-model": "static",
   "target-pointer-width": "32"
