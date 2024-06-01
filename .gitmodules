@@ -2,7 +2,11 @@
 	branch = main
 [submodule "lib/sync"]
 	branch = main
+	path = lib/sync
+	url = git@github.com:anHappyDog/sync.git
 [submodule "lib/elf"]
 	branch = main
+	path = lib/elf
+	url = git@github.com:anHappyDog/elf.git
 [submodule "lib/buddy"]
 	branch = main
