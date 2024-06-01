@@ -1,5 +1,7 @@
 [submodule "lib/mips32"]
 	branch = main
+	path = lib/mips32
+	url = git@github.com:anHappyDog/mips32.git
 [submodule "lib/sync"]
 	branch = main
 	path = lib/sync
@@ -10,3 +12,5 @@
 	url = git@github.com:anHappyDog/elf.git
 [submodule "lib/buddy"]
 	branch = main
+	path = lib/buddy
+	url = git@github.com:anHappyDog/buddy.git
