@@ -1,0 +1,26 @@
+[package]
+name = "fksomething"
+version = "0.1.0"
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+bitflags = "2.5.0"
+buddy = { path = "./lib/buddy" }
+mips32 = { path = "./lib/mips" }
+elf = { path = "./lib/elf" }
+sync = { path = "./lib/sync" }
+
+
+[[bin]]
+name = "mos-6502"
+path = "./kernel/boot.rs"
+
+[profile.release]
+lto = true
+
+[profile.dev]
+lto = false
+codegen-units = 1
+debug = true
+panic = "abort"
