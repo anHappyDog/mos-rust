@@ -1,3 +1,4 @@
+use std::ffi::OsStr;
 use std::process::Command;
 use std::{env, fs, path::PathBuf};
 const CLFAGS: &str = "--std=gnu99 -EL -G 0 -mno-abicalls -fno-pic
@@ -65,6 +66,25 @@ fn compile_cfiles_for_mips32() {
         if !status.success() {
             panic!("Compilation failed for file: {:#?}", &cfile);
         }
+    }
+    // build the fs proc
+    let fs_output_path = PathBuf::from(mos_bin_out_dir).join(std::path::Path::new("fs"));
+    let status = Command::new("mipsel-linux-gnu-gcc")
+        .arg("-o")
+        .arg(fs_output_path)
+        .arg("./user/fs/fs.c")
+        .arg("./user/fs/serv.c")
+        .arg("./user/fs/ide.c")
+        .arg("-T./user/user.lds")
+        .arg("-L./target/user/lib")
+        .arg("-lmos_user")
+        .arg("-I./user/include")
+        .args(env::var("CFLAGS").unwrap_or_default().split_whitespace()) // 添加环境变量中的 CFLAGS
+        .status()
+        .expect("Failed to execute gcc");
+
+    if !status.success() {
+        panic!("Compilation fs server proc failed");
     }
 }
 

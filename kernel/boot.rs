@@ -19,6 +19,7 @@ extern "C" fn _start() -> ! {
     unsafe {
         arch::asm!(
             "\tla $sp,stack_end\r\n
+             \tmove $a0,$a3\r\n
              \tjal   _init\r\n",
             options(noreturn)
         );
