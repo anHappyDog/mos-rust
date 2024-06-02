@@ -14,3 +14,7 @@
 	branch = main
 	path = lib/buddy
 	url = git@github.com:anHappyDog/buddy.git
+[submodule "lib/alloc_macro"]
+	branch = main
+	path = lib/alloc_macro
+	url = git@github.com:anHappyDog/alloc_macro.git
