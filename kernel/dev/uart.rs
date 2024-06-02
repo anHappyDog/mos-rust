@@ -1,20 +1,26 @@
 use core::ptr;
 
-const MALTA_SERIAL_BASE: usize = 0x18000000 + 0x3f8;
+pub const MALTA_SERIAL_BASE: usize = 0x18000000 + 0x3f8;
 const MALTA_SERIAL_DATA: usize = 0x0;
 const MALTA_SERIAL_LSR: usize = 0x5;
 const MALTA_SERIAL_DATA_READY: u8 = 0x1;
 const MALTA_SERIAL_THR_EMPTY: u8 = 0x20;
 
-trait Uart {
+pub trait Uart {
     fn init(&mut self, base: usize, size: usize);
     fn putchar(&self, c: u32);
     fn getchar(&self) -> u32;
 }
 
-struct Ns16550a {
+pub struct Ns16550a {
     base: usize,
     size: usize,
+}
+
+impl Ns16550a {
+    pub const fn new(base: usize, size: usize) -> Self {
+        Ns16550a { base, size }
+    }
 }
 
 impl Uart for Ns16550a {
@@ -22,7 +28,6 @@ impl Uart for Ns16550a {
         self.base = base;
         self.size = size;
     }
-
     fn putchar(&self, c: u32) {
         unsafe {
             while ptr::read_volatile((self.base + MALTA_SERIAL_LSR) as *const u8)

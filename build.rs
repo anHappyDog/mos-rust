@@ -1,4 +1,3 @@
-use std::ffi::OsStr;
 use std::process::Command;
 use std::{env, fs, path::PathBuf};
 const CLFAGS: &str = "--std=gnu99 -EL -G 0 -mno-abicalls -fno-pic
