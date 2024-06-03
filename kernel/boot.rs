@@ -1,6 +1,7 @@
 #![cfg_attr(target_arch = "mips", feature(asm_experimental_arch))]
 #![feature(panic_info_message)]
 #![feature(const_mut_refs)]
+#![feature(alloc_error_handler)]
 #![feature(naked_functions)]
 #![no_std]
 #![no_main]
@@ -16,6 +17,15 @@ mod trap;
 
 use core::arch;
 
+#[no_mangle]
+#[link_section = ".text.boot"]
+extern "C" fn _init(mem_sz: usize) -> ! {
+    logo();
+    mm::mm_init(mem_sz);
+    dev::halt();
+}
+
+
 #[naked]
 #[no_mangle]
 #[link_section = ".text.boot"]
@@ -30,14 +40,7 @@ extern "C" fn _start() -> ! {
     }
 }
 
-#[no_mangle]
-#[link_section = ".text.boot"]
-extern "C" fn _init(mem_sz: usize) -> ! {
-    logo();
-    mm::mm_init(mem_sz);
-    dev::halt();
-    unreachable!("This sentence will never be printed.");
-}
+
 
 fn logo() {
     print!(" __  __    ____     _____\n");

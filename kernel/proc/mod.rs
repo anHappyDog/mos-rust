@@ -28,5 +28,10 @@ struct Env {
 
 
 impl Env {
+    pub fn create(elf_data : &[u8]) {
 
+    }
+    pub fn destroy() {
+        
+    }
 }

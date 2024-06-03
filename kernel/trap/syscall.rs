@@ -20,47 +20,79 @@ const SYS_WRITE_DEV: usize = 16;
 const SYS_READ_DEV: usize = 17;
 const MAX_SYSNO: usize = 18;
 
-fn sys_putchar(c: u32) {}
+fn sys_putchar(c: u32) -> i32 {
+    0
+}
 
-fn sys_print_cons() {}
+fn sys_print_cons(s: *const u8, num: u32) -> i32 {
+    0
+}
 
-fn sys_write_dev() {}
+fn sys_write_dev(va: usize, pa: usize, len: usize) {}
 
-fn sys_read_dev() {}
+fn sys_read_dev(va: usize, pa: usize, len: usize) -> i32 {
+    0
+}
 
-fn sys_getenvid() {}
+fn sys_getenvid() -> i32 {
+    0
+}
 
-fn sys_yield() {}
+fn sys_yield() -> ! {
+    unreachable!("sad");
+}
 
-fn sys_env_destroy() {}
+fn sys_env_destroy(envid: usize) -> i32 {
+    0
+}
 
-fn sys_set_tlb_mod_entry() {}
+fn sys_set_tlb_mod_entry(envid: usize, func: usize) -> i32 {
+    0
+}
 
-fn sys_mem_alloc() {}
+fn sys_mem_alloc(envid: usize, va: usize, perm: usize) -> i32 {
+    0
+}
 
-fn sys_mem_map() {}
+fn sys_mem_map(envid: usize) -> i32 {
+    0
+}
 
-fn sys_mem_unmap() {}
+fn sys_mem_unmap(envid: usize, va: usize) -> i32 {
+    0
+}
 
-fn sys_exofork() {}
+fn sys_exofork() -> i32 {
+    0
+}
 
-fn sys_set_env_status() {}
+fn sys_set_env_status(envid: usize, status: usize) -> i32 {
+    0
+}
 
-fn sys_set_trapframe() {}
+fn sys_set_trapframe(envid: usize, tf: &mut Trapframe) -> i32 {
+    0
+}
 
-fn sys_panic() {}
+fn sys_panic(msg: *const u8) {}
 
-fn sys_ipc_recv() {}
+fn sys_ipc_recv(dstva: usize) -> i32 {
+    0
+}
 
-fn sys_ipc_try_send() {}
+fn sys_ipc_try_send(envid: usize, val: usize, srcva: usize, perm: usize) -> i32 {
+    0
+}
 
-fn sys_cgetc() -> u32 {
+fn sys_cgetc() -> i32 {
     0
 }
 
 pub fn do_syscall(trapframe: &mut Trapframe) {
     trapframe.epc += 4;
-    let ret: u32 = match trapframe.regs[4] {
+    let sysno: usize = trapframe.regs[2];
+
+    let ret: i32 = match trapframe.regs[4] {
         SYS_CGETC => sys_cgetc(),
         _ => 0,
     };

@@ -38,23 +38,4 @@ struct Env {
 	u_int env_runs; // number of times we've been env_run'ed
 };
 
-LIST_HEAD(Env_list, Env);
-TAILQ_HEAD(Env_sched_list, Env);
-extern struct Env *curenv;		     // the current env
-extern struct Env_sched_list env_sched_list; // runnable env list
-
-#define ENV_CREATE_PRIORITY(x, y)                                                                  \
-	({                                                                                         \
-		extern u_char binary_##x##_start[];                                                \
-		extern u_int binary_##x##_size;                                                    \
-		env_create(binary_##x##_start, (u_int)binary_##x##_size, y);                       \
-	})
-
-#define ENV_CREATE(x)                                                                              \
-	({                                                                                         \
-		extern u_char binary_##x##_start[];                                                \
-		extern u_int binary_##x##_size;                                                    \
-		env_create(binary_##x##_start, (u_int)binary_##x##_size, 1);                       \
-	})
-
 #endif // !_ENV_H_

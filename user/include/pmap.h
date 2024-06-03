@@ -19,12 +19,6 @@ struct Pterec
 	pterec_link;
 };
 
-LIST_HEAD(Pterec_list, Pterec);
-
-extern struct Pterec pterecs[];
-extern struct Pterec_list pterec_free_list;
-
-LIST_HEAD(Page_list, Page);
 typedef LIST_ENTRY(Page) Page_LIST_entry_t;
 
 struct Page
