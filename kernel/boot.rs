@@ -6,8 +6,8 @@
 #![no_std]
 #![no_main]
 
-extern crate core;
 extern crate alloc;
+extern crate core;
 
 mod dev;
 mod mm;
@@ -17,14 +17,17 @@ mod trap;
 
 use core::arch;
 
+use proc::sched;
+
 #[no_mangle]
 #[link_section = ".text.boot"]
 extern "C" fn _init(mem_sz: usize) -> ! {
     logo();
-    mm::mm_init(mem_sz);
-    dev::halt();
+    mm::mem_init(mem_sz);
+    trap::trap_init();
+    proc::env_init();
+    sched::schedule(true);
 }
-
 
 #[naked]
 #[no_mangle]
@@ -32,16 +35,15 @@ extern "C" fn _init(mem_sz: usize) -> ! {
 extern "C" fn _start() -> ! {
     unsafe {
         arch::asm!(
-            "\tla $sp,stack_end\r\n
-             \tmove $a0,$a3\r\n
-             \tjal   _init\r\n",
+            "\tla   $sp,    stack_end\r\n
+             \tmove $a0,    $a3      \r\n
+             \tj          _init      \r\n",
             options(noreturn)
         );
     }
 }
 
-
-
+#[inline(always)]
 fn logo() {
     print!(" __  __    ____     _____\n");
     print!("|  \\/  |  / __ \\   / ____|\n");

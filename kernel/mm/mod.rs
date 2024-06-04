@@ -34,4 +34,6 @@ pub const UTEXT: usize = PDMAP;
 pub const UCOW: usize = UTEXT - PTMAP;
 pub const UTEMP: usize = UCOW - PTMAP;
 
-pub fn mm_init(mem_sz: usize) {}
+pub fn mem_init(mem_sz: usize) {
+    page::page_init(mem_sz);
+}

@@ -20,6 +20,8 @@ fn read_cfiles_from_dir(dir: &str) -> Vec<PathBuf> {
         .collect()
 }
 
+fn build_img() {}
+
 fn compile_cfiles_for_mips32() {
     env::set_var("CFLAGS", CLFAGS);
     let _mos_cdir = "./user/bin";
@@ -85,6 +87,7 @@ fn compile_cfiles_for_mips32() {
     if !status.success() {
         panic!("Compilation fs server proc failed");
     }
+    build_img();
 }
 
 fn main() {
