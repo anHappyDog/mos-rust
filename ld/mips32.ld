@@ -1,10 +1,18 @@
 OUTPUT_ARCH(mips)
 ENTRY(_start)
 
-HIDDEN(KBASE = 0x80010000);
-HIDDEN(HEAP_SIZE = 0x20000);
+HIDDEN(KBASE = 0x80020000);
 HIDDEN(STACK_SIZE = 0x4000);
 SECTIONS {
+	. = 0x80000000;
+	.tlb_miss_entry : {
+		*(.text.tlb_miss_entry)
+	}
+
+	. = 0x80000180;
+	.exc_gen_entry : {
+		*(.text.exc_gen_entry)
+	}
 	. = KBASE;
 	.text : {
 		*(.text.boot)

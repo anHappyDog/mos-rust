@@ -1,4 +1,10 @@
-use super::addr::{PhysAddr, VirtAddr};
+use core::ops::{Add, BitAnd};
+
+use super::{
+    addr::{PhysAddr, VirtAddr},
+    page::page_alloc,
+    KSEG0,
+};
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Pgtable {
@@ -11,10 +17,17 @@ pub struct PgtableEntry {
     raw_entry: usize,
 }
 
+impl BitAnd<Permssion> for PgtableEntry {
+    type Output = bool;
+    fn bitand(self, rhs: Permssion) -> bool {
+        self.raw_entry & (rhs.bits() as usize) != 0
+    }
+}
+
 const PTE_HARDFLAG_SHIFT: usize = 0x6;
 
 bitflags::bitflags! {
-    struct Permssion: u32 {
+    pub struct Permssion: usize {
         const PTE_COW =  0x0001;
         const PTE_LIBRARY = 0x0002;
         const PTE_C_CACHEABLE = 0x0018 << PTE_HARDFLAG_SHIFT;
@@ -26,12 +39,12 @@ bitflags::bitflags! {
 }
 
 impl PgtableEntry {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         PgtableEntry { raw_entry: 0 }
     }
 
-    pub fn set(&mut self, ppn: usize, flags: usize) {
-        self.raw_entry = (ppn << 10) | flags;
+    pub fn set(&mut self, ppn: PhysAddr, flags: &Permssion) {
+        self.raw_entry = ppn | flags.bits();
     }
 
     pub fn get(&self) -> usize {
@@ -40,18 +53,10 @@ impl PgtableEntry {
 }
 
 impl Pgtable {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Pgtable {
             entries: [PgtableEntry::new(); 1024],
         }
-    }
-
-    pub fn get_entry(&self, index: usize) -> &PgtableEntry {
-        &self.entries[index]
-    }
-
-    pub fn get_entry_mut(&mut self, index: usize) -> &mut PgtableEntry {
-        &mut self.entries[index]
     }
     pub fn map_va_to_pa(
         &mut self,
@@ -61,11 +66,18 @@ impl Pgtable {
         flags: Permssion,
         reset: bool,
     ) -> Result<(), &'static str> {
+        for i in 0..count {
+            let vpn1 = va.add(i << 12).get_vpn() >> 12;
+            if !(self.entries[vpn1] & Permssion::PTE_V) {
+                let (pno, pa) = page_alloc().ok_or("No more pages")?;
+                self.entries[vpn1].set(pa, &flags);
+            }
+        }
         Ok(())
     }
     pub fn unmap_va(&mut self, va: VirtAddr) -> Result<(), &'static str> {
         let vpn = va.get_vpn();
-        self.entries[vpn].set(0, 0);
+        // self.entries[vpn].set(0, &Permssion::empty());
         Ok(())
     }
 

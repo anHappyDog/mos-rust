@@ -14,9 +14,10 @@ mod mm;
 mod print;
 mod proc;
 mod trap;
-
+mod util;
+use crate::trap::___avoid_fk_compiler_optimization;
 use core::arch;
-
+use mips32::{cp0, Reg};
 use proc::sched;
 
 #[no_mangle]
@@ -26,7 +27,13 @@ extern "C" fn _init(mem_sz: usize) -> ! {
     mm::mem_init(mem_sz);
     trap::trap_init();
     proc::env_init();
+    println!("count is {:x},compare is {:x}", cp0::count::read(),cp0::compare::read());
     sched::schedule(true);
+    // never reach here,to let cheat the compiler
+    // this function "will definitely be called"
+    // so she won't optimize it inner functions.
+    ___avoid_fk_compiler_optimization();
+    dev::halt();
 }
 
 #[naked]
@@ -35,7 +42,8 @@ extern "C" fn _init(mem_sz: usize) -> ! {
 extern "C" fn _start() -> ! {
     unsafe {
         arch::asm!(
-            "\tla   $sp,    stack_end\r\n
+            "\tmtc0 $0 ,    $12      \r\n
+             \tla   $sp,    stack_end\r\n
              \tmove $a0,    $a3      \r\n
              \tj          _init      \r\n",
             options(noreturn)

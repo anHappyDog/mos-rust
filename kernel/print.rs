@@ -1,26 +1,27 @@
 use crate::dev;
+use crate::dev::uart::NS16550A;
 use crate::dev::uart::{self, Uart, MALTA_SERIAL_BASE};
 use core::fmt::{self, Write};
 use core::panic;
-pub struct Stdout {
-    uart: uart::Ns16550a,
-}
+use lazy_static::lazy_static;
+use sync::spin::Spinlock;
+pub struct Stdout;
 
-static mut STDOUT: Stdout = Stdout {
-    uart: uart::Ns16550a::new(MALTA_SERIAL_BASE, 0),
-};
+lazy_static! {
+    static ref STDOUT: Spinlock<Stdout> = Spinlock::new(Stdout {});
+}
 
 impl fmt::Write for Stdout {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         for c in s.chars() {
-            self.uart.putchar(c as u32);
+            NS16550A.putchar(c as u32);
         }
         Ok(())
     }
 }
 
 pub fn _print(args: fmt::Arguments) {
-    unsafe { STDOUT.write_fmt(args).unwrap() };
+    STDOUT.lock().write_fmt(args).unwrap();
 }
 
 #[macro_export]
@@ -56,5 +57,4 @@ fn panic(info: &panic::PanicInfo) -> ! {
         println!("Panic at unknown location: {}", info.message().unwrap());
     }
     dev::halt();
-    unreachable!("Then sentence should never be printed in panic.");
 }

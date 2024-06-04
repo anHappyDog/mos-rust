@@ -1,4 +1,5 @@
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Trapframe {
     pub regs: [usize; 32],
     pub status: usize,
@@ -10,6 +11,18 @@ pub struct Trapframe {
 }
 
 impl Trapframe {
+    #[inline(always)]
+    pub const fn new() -> Self {
+        Self {
+            regs: [0; 32],
+            status: 0,
+            hi: 0,
+            lo: 0,
+            badvaddr: 0,
+            cause: 0,
+            epc: 0,
+        }
+    }
     #[inline(always)]
     pub fn get_arg0(&self) -> usize {
         self.regs[5]

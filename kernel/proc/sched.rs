@@ -1,3 +1,5 @@
-pub fn schedule(y : bool) -> ! {
-    unreachable!("sad");
+pub fn schedule(y : bool) {
+    loop {
+        
+    }
 }

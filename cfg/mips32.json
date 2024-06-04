@@ -6,8 +6,8 @@
   "emit-debug-gdb-scripts": false,
   "features": "+mips32r2,+soft-float,+noabicalls",
   "is-builtin": false,
-  "linker": "rust-lld",
-  "linker-flavor": "gnu-lld",
+  "linker": "mipsel-linux-gnu-ld",
+  "linker-flavor": "ld",
   "llvm-target": "mipsel-unknown-none",
   "max-atomic-width": 32,
   "metadata": {

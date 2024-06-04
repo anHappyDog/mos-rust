@@ -13,3 +13,7 @@ cargo build
 ```shell
 cargo run
 ```
+
+
+## C兼容
+
