@@ -1,13 +1,13 @@
-use core::ops::Add;
-use core::ptr::read_volatile;
-
 use super::trapframe::Trapframe;
 use crate::dev::uart::{Uart, NS16550A};
 use crate::mm::addr::{PhysAddr, VirtAddr};
 use crate::mm::UTOP;
 use crate::mm::{KSEG1, UTEMP};
 use crate::proc::sched::schedule;
+use crate::proc::{CUR_ENV, ENV_LIST};
 use crate::trap::E_INVAL;
+use crate::{dev, print};
+use core::ops::Add;
 
 const SYS_PUTCHAR: usize = 0;
 const SYS_PRINT_CONS: usize = 1;
@@ -76,7 +76,13 @@ fn sys_read_dev(va: VirtAddr, pa: PhysAddr, len: usize) -> i32 {
 }
 
 fn sys_getenvid() -> i32 {
-    0
+    let mut envid: usize = 0;
+    let locked_cur_env_idx = CUR_ENV.lock();
+    let locked_envs = ENV_LIST.lock();
+    if let Some(env_idx) = *locked_cur_env_idx {
+        envid = locked_envs[env_idx].get_envid();
+    }
+    return envid as i32;
 }
 
 fn sys_yield() -> ! {
@@ -112,12 +118,23 @@ fn sys_set_env_status(envid: usize, status: usize) -> i32 {
     0
 }
 
-fn sys_set_trapframe(envid: usize, tf: &mut Trapframe) -> i32 {
+fn sys_set_trapframe(envid: usize, tf: VirtAddr) -> i32 {
     0
 }
 
-fn sys_panic(msg: *const u8) {
-    panic!("{}", 1);
+fn sys_panic(msg: VirtAddr) -> ! {
+    let mut ch: u32;
+    let mut i = 0;
+    print!("user panic: ");
+    loop {
+        ch = msg.add(i).read::<u8>().into();
+        if ch == 0 {
+            break;
+        }
+        NS16550A.putchar(ch);
+        i += 1;
+    }
+    dev::halt();
 }
 
 fn sys_ipc_recv(dstva: usize) -> i32 {
@@ -175,7 +192,43 @@ pub fn do_syscall(trapframe: &mut Trapframe) {
 
     let ret: i32 = match trapframe.regs[4] {
         SYS_CGETC => sys_cgetc(),
-        _ => 0,
+        SYS_PUTCHAR => sys_putchar(trapframe.get_arg0() as u32),
+        SYS_PRINT_CONS => sys_print_cons(VirtAddr::new(trapframe.get_arg0()), trapframe.get_arg1()),
+        SYS_GETENVID => sys_getenvid(),
+        SYS_YIELD => sys_yield(),
+        SYS_ENV_DESTROY => sys_env_destroy(trapframe.get_arg0()),
+        SYS_SET_TLB_MOD_ENTRY => sys_set_tlb_mod_entry(trapframe.get_arg0(), trapframe.get_arg1()),
+        SYS_MEM_ALLOC => sys_mem_alloc(
+            trapframe.get_arg0(),
+            trapframe.get_arg1(),
+            trapframe.get_arg2(),
+        ),
+        SYS_MEM_MAP => sys_mem_map(trapframe.get_arg0()),
+        SYS_MEM_UNMAP => sys_mem_unmap(trapframe.get_arg0(), trapframe.get_arg1()),
+        SYS_EXOFORK => sys_exofork(),
+        SYS_SET_ENV_STATUS => sys_set_env_status(trapframe.get_arg0(), trapframe.get_arg1()),
+        SYS_SET_TRAPFRAME => {
+            sys_set_trapframe(trapframe.get_arg0(), VirtAddr::new(trapframe.get_arg1()))
+        }
+        SYS_PANIC => sys_panic(VirtAddr::new(trapframe.get_arg0())),
+        SYS_IPC_RECV => sys_ipc_recv(trapframe.get_arg0()),
+        SYS_IPC_TRY_SEND => sys_ipc_try_send(
+            trapframe.get_arg0(),
+            trapframe.get_arg1(),
+            trapframe.get_arg2(),
+            trapframe.get_arg3(),
+        ),
+        SYS_WRITE_DEV => sys_write_dev(
+            VirtAddr::new(trapframe.get_arg0()),
+            PhysAddr::new(trapframe.get_arg1()),
+            trapframe.get_arg2(),
+        ),
+        SYS_READ_DEV => sys_read_dev(
+            VirtAddr::new(trapframe.get_arg0()),
+            PhysAddr::new(trapframe.get_arg1()),
+            trapframe.get_arg2(),
+        ),
+        _ => -E_INVAL,
     };
     trapframe.regs[2] = ret as usize;
 }
