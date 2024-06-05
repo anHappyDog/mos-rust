@@ -1,6 +1,7 @@
 pub mod sched;
 
 use crate::mm::addr::VirtAddr;
+use crate::mm::pgtable::Permssion;
 use crate::mm::pgtable::Pgtable;
 use crate::trap::trapframe;
 use crate::trap::trapframe::Trapframe;
@@ -34,9 +35,9 @@ pub struct Env {
     env_pri: usize,
     env_ipc_value: usize,
     env_ipc_from: usize,
-    env_ipc_recving: usize,
-    env_ipc_dstva: usize,
-    env_ipc_perm: usize,
+    pub env_ipc_recving: usize,
+    pub env_ipc_dstva: VirtAddr,
+    env_ipc_perm: Permssion,
     pub env_user_tlb_mod_entry: usize,
     env_runs: usize,
 }
@@ -47,6 +48,17 @@ pub enum EnvStatus {
     EnvFree = 0,
     EnvRunnable = 1,
     EnvNotRunnable = 2,
+}
+
+impl From<usize> for EnvStatus {
+    fn from(value: usize) -> Self {
+        match value {
+            0 => EnvStatus::EnvFree,
+            1 => EnvStatus::EnvRunnable,
+            2 => EnvStatus::EnvNotRunnable,
+            _ => panic!("Invalid EnvStatus.\n"),
+        }
+    }
 }
 
 impl Env {
@@ -63,8 +75,8 @@ impl Env {
             env_ipc_value: 0,
             env_ipc_from: 0,
             env_ipc_recving: 0,
-            env_ipc_dstva: 0,
-            env_ipc_perm: 0,
+            env_ipc_dstva: VirtAddr::new(0),
+            env_ipc_perm: Permssion::empty(),
             env_user_tlb_mod_entry: 0,
             env_runs: 0,
             env_parent_id: 0,

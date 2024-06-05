@@ -38,6 +38,12 @@ bitflags::bitflags! {
     }
 }
 
+impl From<usize> for Permssion {
+    fn from(value: usize) -> Self {
+        Permssion::from_bits_truncate(value)
+    }
+}
+
 impl PgtableEntry {
     pub const fn new() -> Self {
         PgtableEntry { raw_entry: 0 }

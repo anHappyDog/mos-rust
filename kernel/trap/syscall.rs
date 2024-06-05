@@ -179,7 +179,10 @@ fn sys_set_trapframe(envid: usize, tf: VirtAddr) -> i32 {
         if curidx != idx {
             envs[idx].env_tf = tf.read();
         } else {
-            VirtAddr::new(stack_end as usize - size_of::<Trapframe>()).write(tf.read());
+            unsafe {
+                VirtAddr::new(stack_end as usize - size_of::<Trapframe>())
+                    .write(tf.read::<Trapframe>());
+            }
         }
     } else {
         panic!("sys_set_trapframe: no curenv");
@@ -202,8 +205,22 @@ fn sys_panic(msg: VirtAddr) -> ! {
     dev::halt();
 }
 
-fn sys_ipc_recv(dstva: usize) -> i32 {
-    0
+fn sys_ipc_recv(dstva: VirtAddr) -> i32 {
+    if dstva != 0 && is_illegal_va(dstva) {
+        return -E_INVAL;
+    }
+    let mut envs = ENV_LIST.lock();
+    let curenv_idx = CUR_ENV.lock();
+    if let Some(curidx) = *curenv_idx {
+        let curenv = &mut envs[curidx];
+        curenv.env_ipc_dstva = dstva;
+        curenv.env_ipc_recving = 1;
+        curenv.env_status = EnvStatus::EnvNotRunnable;
+        schedule(true);
+    } else {
+        panic!("sys_ipc_recv: no curenv");
+    }
+    return 0;
 }
 
 fn sys_ipc_try_send(envid: usize, val: usize, srcva: usize, perm: usize) -> i32 {
@@ -274,11 +291,11 @@ pub fn do_syscall(trapframe: &mut Trapframe) {
             trapframe.get_arg1().into(),
             trapframe.get_arg2(),
             trapframe.get_arg3().into(),
-            Permssion::new(trapframe.get_arg4()),
+            trapframe.get_arg4().into(),
         ),
         SYS_MEM_UNMAP => sys_mem_unmap(trapframe.get_arg0(), trapframe.get_arg1().into()),
         SYS_EXOFORK => sys_exofork(),
-        SYS_SET_ENV_STATUS => sys_set_env_status(trapframe.get_arg0(), trapframe.get_arg1()),
+        SYS_SET_ENV_STATUS => sys_set_env_status(trapframe.get_arg0(), trapframe.get_arg1().into()),
         SYS_SET_TRAPFRAME => {
             sys_set_trapframe(trapframe.get_arg0(), VirtAddr::new(trapframe.get_arg1()))
         }
