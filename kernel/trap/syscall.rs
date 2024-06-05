@@ -1,12 +1,15 @@
 use super::trapframe::Trapframe;
 use crate::dev::uart::{Uart, NS16550A};
 use crate::mm::addr::{PhysAddr, VirtAddr};
+use crate::mm::page::stack_end;
+use crate::mm::pgtable::Permssion;
 use crate::mm::UTOP;
 use crate::mm::{KSEG1, UTEMP};
 use crate::proc::sched::schedule;
-use crate::proc::{CUR_ENV, ENV_LIST};
+use crate::proc::{get_idx_by_envid, EnvIndex, EnvStatus, CUR_ENV, ENV_LIST};
 use crate::trap::E_INVAL;
 use crate::{dev, print};
+use core::mem::size_of;
 use core::ops::Add;
 
 const SYS_PUTCHAR: usize = 0;
@@ -95,31 +98,93 @@ fn sys_env_destroy(envid: usize) -> i32 {
 }
 
 fn sys_set_tlb_mod_entry(envid: usize, func: usize) -> i32 {
-    0
+    let idx = get_idx_by_envid(envid);
+    let mut envs = ENV_LIST.lock();
+    envs[idx].env_user_tlb_mod_entry = func;
+    return 0;
 }
 
 fn sys_mem_alloc(envid: usize, va: usize, perm: usize) -> i32 {
     0
 }
 
-fn sys_mem_map(envid: usize) -> i32 {
-    0
+fn sys_mem_map(
+    srcid: usize,
+    srcva: VirtAddr,
+    dstid: usize,
+    dstva: VirtAddr,
+    flags: Permssion,
+) -> i32 {
+    if is_illegal_va(srcva) || is_illegal_va(dstva) {
+        return -E_INVAL;
+    }
+    let srcidx = get_idx_by_envid(srcid);
+    let dstidx = get_idx_by_envid(dstid);
+    let mut envs = ENV_LIST.lock();
+    let pa = {
+        let srcenv = &envs[srcidx];
+        match srcenv.env_pgdir.va_to_pa(srcva) {
+            Some(pa) => pa,
+            _ => return -E_INVAL,
+        }
+    };
+    let dstenv = &mut envs[dstidx];
+    let result = dstenv.env_pgdir.map_va_to_pa(dstva, pa, 1, flags, false);
+    if let Ok(_) = result {
+        return 0;
+    } else {
+        return -E_INVAL;
+    }
 }
 
-fn sys_mem_unmap(envid: usize, va: usize) -> i32 {
-    0
+fn sys_mem_unmap(envid: EnvIndex, va: VirtAddr) -> i32 {
+    if is_illegal_va(va) {
+        return -E_INVAL;
+    }
+    let idx = get_idx_by_envid(envid);
+    let mut envs = ENV_LIST.lock();
+    let env = &mut envs[idx];
+    if let Ok(_) = env.env_pgdir.unmap_va(va) {
+        return 0;
+    } else {
+        return -E_INVAL;
+    }
 }
 
 fn sys_exofork() -> i32 {
     0
 }
 
-fn sys_set_env_status(envid: usize, status: usize) -> i32 {
-    0
+fn sys_set_env_status(envid: usize, status: EnvStatus) -> i32 {
+    if status != EnvStatus::EnvFree
+        && status != EnvStatus::EnvRunnable
+        && status != EnvStatus::EnvNotRunnable
+    {
+        return -E_INVAL;
+    }
+    let idx = get_idx_by_envid(envid);
+    let mut envs = ENV_LIST.lock();
+    envs[idx].env_status = status;
+    return 0;
 }
 
 fn sys_set_trapframe(envid: usize, tf: VirtAddr) -> i32 {
-    0
+    if is_illegal_va_range(tf, size_of::<Trapframe>()) {
+        return -E_INVAL;
+    }
+    let idx = get_idx_by_envid(envid);
+    let mut envs = ENV_LIST.lock();
+    let curenv_idx = CUR_ENV.lock();
+    if let Some(curidx) = *curenv_idx {
+        if curidx != idx {
+            envs[idx].env_tf = tf.read();
+        } else {
+            VirtAddr::new(stack_end as usize - size_of::<Trapframe>()).write(tf.read());
+        }
+    } else {
+        panic!("sys_set_trapframe: no curenv");
+    }
+    return 0;
 }
 
 fn sys_panic(msg: VirtAddr) -> ! {
@@ -155,6 +220,7 @@ fn sys_cgetc() -> i32 {
     }
 }
 
+#[inline(always)]
 fn is_illegal_va(va: VirtAddr) -> bool {
     return va < UTEMP || va >= UTOP;
 }
@@ -203,8 +269,14 @@ pub fn do_syscall(trapframe: &mut Trapframe) {
             trapframe.get_arg1(),
             trapframe.get_arg2(),
         ),
-        SYS_MEM_MAP => sys_mem_map(trapframe.get_arg0()),
-        SYS_MEM_UNMAP => sys_mem_unmap(trapframe.get_arg0(), trapframe.get_arg1()),
+        SYS_MEM_MAP => sys_mem_map(
+            trapframe.get_arg0(),
+            trapframe.get_arg1().into(),
+            trapframe.get_arg2(),
+            trapframe.get_arg3().into(),
+            Permssion::new(trapframe.get_arg4()),
+        ),
+        SYS_MEM_UNMAP => sys_mem_unmap(trapframe.get_arg0(), trapframe.get_arg1().into()),
         SYS_EXOFORK => sys_exofork(),
         SYS_SET_ENV_STATUS => sys_set_env_status(trapframe.get_arg0(), trapframe.get_arg1()),
         SYS_SET_TRAPFRAME => {

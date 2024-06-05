@@ -17,8 +17,10 @@ mod trap;
 mod util;
 use crate::trap::___avoid_fk_compiler_optimization;
 use core::arch;
-use mips32::{cp0, Reg};
 use proc::sched;
+
+DEFINE_ELF_BYTES!(USER_ICODE, "../target/user/bin/icode");
+DEFINE_ELF_BYTES!(FS_SERV, "../target/user/bin/fs");
 
 #[no_mangle]
 #[link_section = ".text.boot"]
@@ -27,7 +29,8 @@ extern "C" fn _init(mem_sz: usize) -> ! {
     mm::mem_init(mem_sz);
     trap::trap_init();
     proc::env_init();
-    println!("count is {:x},compare is {:x}", cp0::count::read(),cp0::compare::read());
+    proc::env_create(USER_ICODE);
+    proc::env_create(FS_SERV);
     sched::schedule(true);
     // never reach here,to let cheat the compiler
     // this function "will definitely be called"

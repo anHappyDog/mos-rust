@@ -45,7 +45,7 @@ lazy_static! {
 }
 
 extern "C" {
-    static stack_end: usize;
+    pub static stack_end: usize;
 }
 
 pub(super) fn page_init(mem_sz: usize) {

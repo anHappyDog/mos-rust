@@ -38,3 +38,7 @@ opt-level = 0
 codegen-units = 1
 debug = true
 panic = "abort"
+
+[features]
+default = ["fit-cmos"]
+fit-cmos = []
