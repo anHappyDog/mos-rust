@@ -1,12 +1,14 @@
 use super::trapframe::Trapframe;
 use crate::dev::uart::{Uart, NS16550A};
 use crate::mm::addr::{PhysAddr, VirtAddr};
-use crate::mm::page::stack_end;
+use crate::mm::page::{page_alloc, stack_end};
 use crate::mm::pgtable::Permssion;
 use crate::mm::UTOP;
 use crate::mm::{KSEG1, UTEMP};
 use crate::proc::sched::schedule;
-use crate::proc::{get_idx_by_envid, EnvIndex, EnvStatus, CUR_ENV, ENV_LIST};
+use crate::proc::{
+    get_idx_by_envid, Env, EnvIndex, EnvStatus, CUR_ENV, ENV_FREE_LIST, ENV_LIST, ENV_SCHED_LIST,
+};
 use crate::trap::E_INVAL;
 use crate::{dev, print};
 use core::mem::size_of;
@@ -94,7 +96,20 @@ fn sys_yield() -> ! {
 }
 
 fn sys_env_destroy(envid: usize) -> i32 {
-    0
+    let idx = get_idx_by_envid(envid);
+    let env: &mut Env = { &mut ENV_LIST.lock()[idx] };
+    env.env_status = EnvStatus::EnvFree;
+    let mut env_free_list = ENV_FREE_LIST.lock();
+    env_free_list.push(env.env_link.clone());
+    let mut curenv = CUR_ENV.lock();
+    if let Some(curidx) = *curenv {
+        if curidx == idx {
+            *curenv = None;
+            drop(curenv);
+            schedule(true);
+        }
+    }
+    return 0;
 }
 
 fn sys_set_tlb_mod_entry(envid: usize, func: usize) -> i32 {
@@ -104,8 +119,20 @@ fn sys_set_tlb_mod_entry(envid: usize, func: usize) -> i32 {
     return 0;
 }
 
-fn sys_mem_alloc(envid: usize, va: usize, perm: usize) -> i32 {
-    0
+fn sys_mem_alloc(envid: usize, va: VirtAddr, perm: Permssion) -> i32 {
+    if is_illegal_va(va) {
+        return -E_INVAL;
+    }
+    let idx = get_idx_by_envid(envid);
+    let mut envs = ENV_LIST.lock();
+    let env = &mut envs[idx];
+    let (_, page_pa) = page_alloc().unwrap();
+    let result = env.env_pgdir.map_va_to_pa(va, page_pa, 1, &perm, false);
+    if let Ok(_) = result {
+        return 0;
+    } else {
+        return -E_INVAL;
+    }
 }
 
 fn sys_mem_map(
@@ -124,7 +151,7 @@ fn sys_mem_map(
     let pa = {
         let srcenv = &envs[srcidx];
         match srcenv.env_pgdir.va_to_pa(srcva) {
-            Some(pa) => pa,
+            Some((_, pa)) => pa,
             _ => return -E_INVAL,
         }
     };
@@ -152,7 +179,7 @@ fn sys_mem_unmap(envid: EnvIndex, va: VirtAddr) -> i32 {
 }
 
 fn sys_exofork() -> i32 {
-    0
+    panic!("sys_exofork: not implemented");
 }
 
 fn sys_set_env_status(envid: usize, status: EnvStatus) -> i32 {
@@ -223,8 +250,37 @@ fn sys_ipc_recv(dstva: VirtAddr) -> i32 {
     return 0;
 }
 
-fn sys_ipc_try_send(envid: usize, val: usize, srcva: usize, perm: usize) -> i32 {
-    0
+fn sys_ipc_try_send(envid: usize, val: usize, srcva: VirtAddr, perm: Permssion) -> i32 {
+    if srcva != VirtAddr::zero() && is_illegal_va(srcva) {
+        return -E_INVAL;
+    }
+    let idx = get_idx_by_envid(envid);
+    let env: &mut Env = { &mut ENV_LIST.lock()[idx] };
+    let curenv: &mut Env = { &mut ENV_LIST.lock()[get_idx_by_envid(sys_getenvid() as usize)] };
+    if env.env_ipc_recving == 0 {
+        return -E_INVAL;
+    }
+    env.env_ipc_value = val;
+    env.env_ipc_from = curenv.env_id;
+    env.env_ipc_perm = perm | Permssion::PTE_V;
+    env.env_ipc_recving = 0;
+    env.env_status = EnvStatus::EnvRunnable;
+    if srcva == VirtAddr::zero() {
+        return 0;
+    }
+    match curenv.env_pgdir.va_to_pa(srcva) {
+        Some((_, pa)) => {
+            let result = env
+                .env_pgdir
+                .map_va_to_pa(env.env_ipc_dstva, pa, 1, &perm, false);
+            if let Ok(_) = result {
+                return 0;
+            } else {
+                return -E_INVAL;
+            }
+        }
+        _ => return -E_INVAL,
+    }
 }
 
 fn sys_cgetc() -> i32 {
@@ -271,8 +327,6 @@ fn is_illegal_va_range(va: VirtAddr, len: usize) -> bool {
 
 pub fn do_syscall(trapframe: &mut Trapframe) {
     trapframe.epc += 4;
-    let sysno: usize = trapframe.regs[2];
-
     let ret: i32 = match trapframe.regs[4] {
         SYS_CGETC => sys_cgetc(),
         SYS_PUTCHAR => sys_putchar(trapframe.get_arg0() as u32),
@@ -283,8 +337,8 @@ pub fn do_syscall(trapframe: &mut Trapframe) {
         SYS_SET_TLB_MOD_ENTRY => sys_set_tlb_mod_entry(trapframe.get_arg0(), trapframe.get_arg1()),
         SYS_MEM_ALLOC => sys_mem_alloc(
             trapframe.get_arg0(),
-            trapframe.get_arg1(),
-            trapframe.get_arg2(),
+            trapframe.get_arg1().into(),
+            trapframe.get_arg2().into(),
         ),
         SYS_MEM_MAP => sys_mem_map(
             trapframe.get_arg0(),
@@ -302,8 +356,8 @@ pub fn do_syscall(trapframe: &mut Trapframe) {
         SYS_IPC_TRY_SEND => sys_ipc_try_send(
             trapframe.get_arg0(),
             trapframe.get_arg1(),
-            trapframe.get_arg2(),
-            trapframe.get_arg3(),
+            trapframe.get_arg2().into(),
+            trapframe.get_arg3().into(),
         ),
         SYS_WRITE_DEV => sys_write_dev(
             trapframe.get_arg0().into(),

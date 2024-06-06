@@ -59,7 +59,20 @@ impl DoubleLinkedList {
             self.tail = Some(node);
         }
     }
-
+    pub fn remove(&mut self, node: Arc<RefCell<ListNode>>) {
+        let prev = node.borrow().prev.clone();
+        let next = node.borrow().next.clone();
+        if let Some(prev) = prev.clone() {
+            prev.borrow_mut().next = next.clone();
+        } else {
+            self.head = next.clone();
+        }
+        if let Some(next) = next.clone() {
+            next.borrow_mut().prev = prev.clone();
+        } else {
+            self.tail = prev.clone();
+        }
+    }
     pub fn pop(&mut self) -> Option<Arc<RefCell<ListNode>>> {
         if self.head.is_none() {
             return None;

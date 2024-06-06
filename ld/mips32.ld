@@ -2,7 +2,7 @@ OUTPUT_ARCH(mips)
 ENTRY(_start)
 
 HIDDEN(KBASE = 0x80020000);
-HIDDEN(STACK_SIZE = 0x6000);
+HIDDEN(STACK_SIZE = 0x8000);
 SECTIONS {
 	. = 0x80000000;
 	.tlb_miss_entry : {

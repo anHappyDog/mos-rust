@@ -67,7 +67,10 @@ fn build_img() {
         .expect("Failed to read directory")
         .filter_map(|entry| entry.ok().map(|e| e.path()))
         .collect::<Vec<_>>();
-    let mut rootfs = rootfs.iter().map(|p| p.as_os_str()).collect::<Vec<&OsStr>>();
+    let mut rootfs = rootfs
+        .iter()
+        .map(|p| p.as_os_str())
+        .collect::<Vec<&OsStr>>();
     args.append(&mut rootfs);
 
     println!("{:?}", args);

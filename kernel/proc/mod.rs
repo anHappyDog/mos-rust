@@ -1,4 +1,7 @@
 pub mod sched;
+use crate::mm::USTACKTOP;
+use crate::trap::int::TIME_INTERVAL;
+
 use crate::mm::addr::VirtAddr;
 use crate::mm::page::page_alloc;
 use crate::mm::page::Page;
@@ -7,7 +10,6 @@ use crate::mm::pgtable::Permssion;
 use crate::mm::pgtable::Pgtable;
 use crate::mm::UENVS;
 use crate::mm::UPAGES;
-use crate::println;
 use crate::trap::trapframe;
 use crate::trap::trapframe::Trapframe;
 use crate::util::DoubleLinkedList;
@@ -15,12 +17,18 @@ use crate::util::ListNode;
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+use core::arch;
 use core::cell::RefCell;
-use core::mem;
 use core::mem::size_of;
 use core::ops::Add;
+use elf::ElfHeader;
 use elf::ProgramHeader;
 use lazy_static::lazy_static;
+use mips32::cp0::ST_EXL;
+use mips32::cp0::ST_IE;
+use mips32::cp0::ST_IM7;
+use mips32::cp0::ST_UM;
+use mips32::{cp0, gpr, Reg};
 use sync::spin::Spinlock;
 
 #[repr(C)]
@@ -28,26 +36,26 @@ pub struct Env {
     pub env_tf: trapframe::Trapframe,
 
     //padding for env_link 8B
-    env_link: Arc<RefCell<ListNode>>,
+    pub env_link: Arc<RefCell<ListNode>>,
     env_padding1: [u8; 4],
     //
-    env_id: usize,
+    pub env_id: usize,
     env_asid: usize,
     env_parent_id: usize,
     pub env_status: EnvStatus,
     pub env_pgdir: Box<Pgtable>,
 
     // padding for env_sched_link 8B
-    env_sched_link: Arc<RefCell<ListNode>>,
-    env_cur_runs: usize,
-    env_pri: usize,
-    env_ipc_value: usize,
-    env_ipc_from: usize,
+    pub env_sched_link: Arc<RefCell<ListNode>>,
+    pub env_cur_runs: isize,
+    pub env_pri: usize,
+    pub env_ipc_value: usize,
+    pub env_ipc_from: usize,
     pub env_ipc_recving: usize,
     pub env_ipc_dstva: VirtAddr,
-    env_ipc_perm: Permssion,
+    pub env_ipc_perm: Permssion,
     pub env_user_tlb_mod_entry: usize,
-    env_runs: usize,
+    pub env_runs: usize,
 }
 
 #[repr(C)]
@@ -93,6 +101,7 @@ impl Env {
         }
     }
     pub fn create(&mut self, elf_data: &[u8]) {
+        self.env_pri = DEFAULT_PRIO;
         let elf_ident = elf::ElfIdent::try_load(elf_data).unwrap();
         let elf_header = elf::load_elf_header::<elf::ElfHeader32>(elf_data, &elf_ident).unwrap();
         let elf_program_headers =
@@ -123,12 +132,18 @@ impl Env {
                 }
             }
         });
+        self.env_id = mkenvid(self.env_link.borrow().idx);
+        self.env_asid = asid_alloc().unwrap();
+        self.env_status = EnvStatus::EnvRunnable;
+        self.env_tf.epc = elf_header.get_entry() as usize;
+        self.env_tf.regs[29] = USTACKTOP.raw - size_of::<usize>() * 2;
+        self.env_tf.status = ST_IM7 | ST_IE | ST_EXL | ST_UM;
     }
     pub fn destroy(&mut self) {}
     pub fn get_envid(&self) -> usize {
         self.env_id
     }
-    pub fn run(&mut self) {}
+
 }
 pub const NASID: usize = 256;
 pub const LOG2NENV: usize = 10;
@@ -138,8 +153,10 @@ pub type EnvIndex = usize;
 lazy_static! {
     pub static ref ENV_LIST: Spinlock<Vec<Env>> = Spinlock::new(Vec::new());
     pub static ref CUR_ENV: Spinlock<Option<EnvIndex>> = Spinlock::new(None);
-    static ref ENV_FREE_LIST: Spinlock<DoubleLinkedList> = Spinlock::new(DoubleLinkedList::new());
-    static ref ENV_SCHED_LIST: Spinlock<DoubleLinkedList> = Spinlock::new(DoubleLinkedList::new());
+    pub static ref ENV_FREE_LIST: Spinlock<DoubleLinkedList> =
+        Spinlock::new(DoubleLinkedList::new());
+    pub static ref ENV_SCHED_LIST: Spinlock<DoubleLinkedList> =
+        Spinlock::new(DoubleLinkedList::new());
     static ref ASID_BITMAP: Spinlock<Box<[u32; NASID / 32]>> =
         Spinlock::new(Box::new([0; NASID / 32]));
     static ref NEXT_ALLOC_ENV_ID: Spinlock<usize> = Spinlock::new(0);
@@ -212,8 +229,8 @@ fn mkenvid(idx: usize) -> usize {
 fn asid_alloc() -> Result<usize, &'static str> {
     let mut locked_asid_bitmap = ASID_BITMAP.lock();
     for i in 0..NASID {
-        let mut index = i >> 5;
-        let mut inner = i & 31;
+        let index = i >> 5;
+        let inner = i & 31;
         if locked_asid_bitmap[index] & (1 << inner) == 0 {
             locked_asid_bitmap[index] |= 1 << inner;
             return Ok(i);
@@ -223,19 +240,17 @@ fn asid_alloc() -> Result<usize, &'static str> {
 }
 
 fn env_alloc() -> Result<EnvIndex, &'static str> {
-    let mut env_free_list = ENV_FREE_LIST.lock();
-    let mut envs = ENV_LIST.lock();
-    if env_free_list.head.is_none() {
-        return Err("No more free env.");
-    }
-    let node = env_free_list.pop().unwrap();
+    let node = ENV_FREE_LIST.lock().pop().expect("No more free env.");
     let idx = node.borrow().idx;
-    envs[idx].env_status = EnvStatus::EnvRunnable;
-    envs[idx].env_id = mkenvid(idx);
-    envs[idx].env_asid = asid_alloc().unwrap();
+    let env = &mut ENV_LIST.lock()[idx];
+    env.env_status = EnvStatus::EnvRunnable;
+    env.env_id = mkenvid(idx);
+    env.env_asid = asid_alloc().unwrap();
 
     return Ok(idx);
 }
+
+pub const DEFAULT_PRIO: usize = 1;
 
 pub fn env_create(elf_data: &[u8]) {
     let env_idx = env_alloc().unwrap();

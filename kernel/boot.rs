@@ -3,6 +3,7 @@
 #![feature(const_mut_refs)]
 #![feature(alloc_error_handler)]
 #![feature(naked_functions)]
+#![feature(mem_copy_fn)]
 #![no_std]
 #![no_main]
 
@@ -22,7 +23,7 @@ use proc::sched;
 
 elf::DEFINE_ELF_BYTES!(USER_ICODE, "../target/user/bin/icode");
 elf::DEFINE_ELF_BYTES!(FS_SERV, "../target/user/bin/fs");
-
+elf::DEFINE_ELF_BYTES!(TEST1, "../target/user/bin/test1");
 #[no_mangle]
 #[link_section = ".text.boot"]
 extern "C" fn _init(mem_sz: usize) -> ! {
@@ -30,10 +31,13 @@ extern "C" fn _init(mem_sz: usize) -> ! {
     mm::mem_init(mem_sz);
     proc::env_init();
     trap::trap_init();
-    println!("creating user_icode");
-    proc::env_create(USER_ICODE);
-    println!("creating fs_serv");
-    proc::env_create(FS_SERV);
+    // println!("creating user_icode");
+    // proc::env_create(USER_ICODE);
+    // println!("creating fs_serv");
+    // proc::env_create(FS_SERV);
+    println!("creating test1");
+    proc::env_create(TEST1);
+
     sched::schedule(true);
     // never reach here,to let cheat the compiler
     // this function "will definitely be called"
