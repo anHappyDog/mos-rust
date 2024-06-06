@@ -129,7 +129,7 @@ fn sys_mem_map(
         }
     };
     let dstenv = &mut envs[dstidx];
-    let result = dstenv.env_pgdir.map_va_to_pa(dstva, pa, 1, flags, false);
+    let result = dstenv.env_pgdir.map_va_to_pa(dstva, pa, 1, &flags, false);
     if let Ok(_) = result {
         return 0;
     } else {
@@ -206,7 +206,7 @@ fn sys_panic(msg: VirtAddr) -> ! {
 }
 
 fn sys_ipc_recv(dstva: VirtAddr) -> i32 {
-    if dstva != 0 && is_illegal_va(dstva) {
+    if dstva != VirtAddr::zero() && is_illegal_va(dstva) {
         return -E_INVAL;
     }
     let mut envs = ENV_LIST.lock();
@@ -276,7 +276,7 @@ pub fn do_syscall(trapframe: &mut Trapframe) {
     let ret: i32 = match trapframe.regs[4] {
         SYS_CGETC => sys_cgetc(),
         SYS_PUTCHAR => sys_putchar(trapframe.get_arg0() as u32),
-        SYS_PRINT_CONS => sys_print_cons(VirtAddr::new(trapframe.get_arg0()), trapframe.get_arg1()),
+        SYS_PRINT_CONS => sys_print_cons(trapframe.get_arg0().into(), trapframe.get_arg1()),
         SYS_GETENVID => sys_getenvid(),
         SYS_YIELD => sys_yield(),
         SYS_ENV_DESTROY => sys_env_destroy(trapframe.get_arg0()),
@@ -296,11 +296,9 @@ pub fn do_syscall(trapframe: &mut Trapframe) {
         SYS_MEM_UNMAP => sys_mem_unmap(trapframe.get_arg0(), trapframe.get_arg1().into()),
         SYS_EXOFORK => sys_exofork(),
         SYS_SET_ENV_STATUS => sys_set_env_status(trapframe.get_arg0(), trapframe.get_arg1().into()),
-        SYS_SET_TRAPFRAME => {
-            sys_set_trapframe(trapframe.get_arg0(), VirtAddr::new(trapframe.get_arg1()))
-        }
-        SYS_PANIC => sys_panic(VirtAddr::new(trapframe.get_arg0())),
-        SYS_IPC_RECV => sys_ipc_recv(trapframe.get_arg0()),
+        SYS_SET_TRAPFRAME => sys_set_trapframe(trapframe.get_arg0(), trapframe.get_arg1().into()),
+        SYS_PANIC => sys_panic(trapframe.get_arg0().into()),
+        SYS_IPC_RECV => sys_ipc_recv(trapframe.get_arg0().into()),
         SYS_IPC_TRY_SEND => sys_ipc_try_send(
             trapframe.get_arg0(),
             trapframe.get_arg1(),
@@ -308,13 +306,13 @@ pub fn do_syscall(trapframe: &mut Trapframe) {
             trapframe.get_arg3(),
         ),
         SYS_WRITE_DEV => sys_write_dev(
-            VirtAddr::new(trapframe.get_arg0()),
-            PhysAddr::new(trapframe.get_arg1()),
+            trapframe.get_arg0().into(),
+            trapframe.get_arg1().into(),
             trapframe.get_arg2(),
         ),
         SYS_READ_DEV => sys_read_dev(
-            VirtAddr::new(trapframe.get_arg0()),
-            PhysAddr::new(trapframe.get_arg1()),
+            trapframe.get_arg0().into(),
+            trapframe.get_arg1().into(),
             trapframe.get_arg2(),
         ),
         _ => -E_INVAL,

@@ -76,10 +76,38 @@ impl DoubleLinkedList {
     }
 }
 
+#[no_mangle]
+extern "C" fn memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 {
+    let mut i = 0;
+    while i < n {
+        let a = unsafe { *s1.add(i) };
+        let b = unsafe { *s2.add(i) };
+        if a != b {
+            return a as i32 - b as i32;
+        }
+        i += 1;
+    }
+    return 0;
+}
 
-#[macro_export]
-macro_rules! DEFINE_ELF_BYTES {
-    ($var_name : ident,$path : literal) => {
-        static $var_name: &[u8] = include_bytes!($path);
-    };
+#[no_mangle]
+extern "C" fn memmove(dst: *mut u8, src: *const u8, n: usize) -> *mut u8 {
+    let mut i = 0;
+    if dst < src as *mut u8 {
+        while i < n {
+            unsafe {
+                *dst.add(i) = *src.add(i);
+            }
+            i += 1;
+        }
+    } else {
+        i = n;
+        while i > 0 {
+            unsafe {
+                *dst.add(i - 1) = *src.add(i - 1);
+            }
+            i -= 1;
+        }
+    }
+    return dst;
 }

@@ -48,7 +48,6 @@ impl PgtableEntry {
     pub const fn new() -> Self {
         PgtableEntry { raw_entry: 0 }
     }
-
     pub fn to_addr(&self) -> PhysAddr {
         PhysAddr::new(self.raw_entry & 0xfffff000)
     }
@@ -73,7 +72,7 @@ impl Pgtable {
         va: VirtAddr,
         pa: PhysAddr,
         count: usize,
-        flags: Permssion,
+        flags: &Permssion,
         reset: bool,
     ) -> Result<(), &'static str> {
         for i in 0..count {

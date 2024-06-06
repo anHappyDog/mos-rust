@@ -17,7 +17,7 @@ type PageIndex = usize;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct Page {
+pub struct Page {
     p_no: u32,
     p_pa: PhysAddr,
     p_ref: u16,
@@ -40,7 +40,7 @@ impl Page {
 }
 
 lazy_static! {
-    static ref PAGES: Spinlock<Vec<Page>> = Spinlock::new(Vec::new());
+    pub static ref PAGES: Spinlock<Vec<Page>> = Spinlock::new(Vec::new());
     static ref PAGE_LIST: Spinlock<IndexStack> = Spinlock::new(IndexStack::new());
 }
 

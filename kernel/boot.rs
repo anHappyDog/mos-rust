@@ -17,19 +17,22 @@ mod trap;
 mod util;
 use crate::trap::___avoid_fk_compiler_optimization;
 use core::arch;
+use elf::{load_elf_header, load_elf_program_headers, load_elf_section_headers, ProgramHeader};
 use proc::sched;
 
-DEFINE_ELF_BYTES!(USER_ICODE, "../target/user/bin/icode");
-DEFINE_ELF_BYTES!(FS_SERV, "../target/user/bin/fs");
+elf::DEFINE_ELF_BYTES!(USER_ICODE, "../target/user/bin/icode");
+elf::DEFINE_ELF_BYTES!(FS_SERV, "../target/user/bin/fs");
 
 #[no_mangle]
 #[link_section = ".text.boot"]
 extern "C" fn _init(mem_sz: usize) -> ! {
     logo();
     mm::mem_init(mem_sz);
-    trap::trap_init();
     proc::env_init();
+    trap::trap_init();
+    println!("creating user_icode");
     proc::env_create(USER_ICODE);
+    println!("creating fs_serv");
     proc::env_create(FS_SERV);
     sched::schedule(true);
     // never reach here,to let cheat the compiler

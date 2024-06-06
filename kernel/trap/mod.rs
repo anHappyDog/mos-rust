@@ -1,14 +1,12 @@
 pub mod int;
 pub mod syscall;
+pub mod tlb;
 pub mod trapframe;
-
 use core::{
     arch::{self, global_asm},
     usize,
 };
 use int::{enable_interrupt, enable_timer_interrupt, TIME_INTERVAL};
-
-use trapframe::Trapframe;
 
 pub const E_UNSPECIFIED: i32 = 1;
 pub const E_BAD_ENV: i32 = 2;
@@ -45,7 +43,6 @@ const EXC_CODE_C2E: usize = 18;
 pub fn trap_init() {
     enable_interrupt();
     enable_timer_interrupt();
-
 }
 
 fn do_c2e(trapframe: &mut trapframe::Trapframe) {
@@ -92,18 +89,6 @@ fn do_adel(trapframe: &mut trapframe::Trapframe) {
     panic!("Address error exception: {:x}", trapframe.badvaddr);
 }
 
-fn do_tlbs(trapframe: &mut trapframe::Trapframe) {
-    panic!("TLB exception: {:x}", trapframe.badvaddr);
-}
-
-fn do_tlbl(trapframe: &mut trapframe::Trapframe) {
-    panic!("TLB exception: {:x}", trapframe.badvaddr);
-}
-
-fn do_tlb_mod(trapframe: &mut trapframe::Trapframe) {
-    panic!("TLB exception: {:x}", trapframe.badvaddr);
-}
-
 fn do_unknown_exception(trapframe: &mut trapframe::Trapframe) {
     panic!("Unknown exception: {:x}", trapframe.cause);
 }
@@ -118,9 +103,9 @@ extern "C" fn trap_handler(trapframe: &mut trapframe::Trapframe) {
     let cause = (trapframe.cause >> 2) & 0x1f;
     match cause {
         EXC_CODE_INT => int::do_interrupt(trapframe),
-        EXC_CODE_MOD => do_tlb_mod(trapframe),
-        EXC_CODE_TLBL => do_tlbl(trapframe),
-        EXC_CODE_TLBS => do_tlbs(trapframe),
+        EXC_CODE_MOD => tlb::do_tlb_mod(trapframe),
+        EXC_CODE_TLBL => tlb::do_tlbl(trapframe),
+        EXC_CODE_TLBS => tlb::do_tlbs(trapframe),
         EXC_CODE_ADEL => do_adel(trapframe),
         EXC_CODE_ADES => do_ades(trapframe),
         EXC_CODE_IBE => do_ibe(trapframe),

@@ -1,8 +1,13 @@
 pub mod sched;
-
 use crate::mm::addr::VirtAddr;
+use crate::mm::page::page_alloc;
+use crate::mm::page::Page;
+use crate::mm::page::PAGE_SIZE;
 use crate::mm::pgtable::Permssion;
 use crate::mm::pgtable::Pgtable;
+use crate::mm::UENVS;
+use crate::mm::UPAGES;
+use crate::println;
 use crate::trap::trapframe;
 use crate::trap::trapframe::Trapframe;
 use crate::util::DoubleLinkedList;
@@ -11,7 +16,10 @@ use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::cell::RefCell;
+use core::mem;
 use core::mem::size_of;
+use core::ops::Add;
+use elf::ProgramHeader;
 use lazy_static::lazy_static;
 use sync::spin::Spinlock;
 
@@ -84,7 +92,38 @@ impl Env {
             env_cur_runs: 0,
         }
     }
-    pub fn create(&mut self, elf_data: &[u8]) {}
+    pub fn create(&mut self, elf_data: &[u8]) {
+        let elf_ident = elf::ElfIdent::try_load(elf_data).unwrap();
+        let elf_header = elf::load_elf_header::<elf::ElfHeader32>(elf_data, &elf_ident).unwrap();
+        let elf_program_headers =
+            elf::load_elf_program_headers::<elf::ProgramHeader32>(elf_data, &elf_header).unwrap();
+        elf_program_headers.iter().for_each(|ph| {
+            if ph.get_type() != elf::PT_LOAD {
+                return;
+            }
+            let va = VirtAddr::new(ph.get_vaddr() as usize);
+            let memsz = ph.get_memsz() as usize;
+            let file_offset = ph.get_offset() as usize;
+            let file_sz = ph.get_filesz() as usize;
+            let perm = Permssion::PTE_V | Permssion::PTE_D;
+            for i in 0..memsz.div_ceil(PAGE_SIZE) {
+                let (_, page_pa) = page_alloc().unwrap();
+                self.env_pgdir
+                    .as_mut()
+                    .map_va_to_pa(va.add(i * PAGE_SIZE), page_pa, 1, &perm, false)
+                    .unwrap();
+                unsafe {
+                    if i * PAGE_SIZE < file_sz {
+                        core::ptr::copy(
+                            elf_data.as_ptr().add(file_offset + i * PAGE_SIZE),
+                            page_pa.into(),
+                            core::cmp::min(PAGE_SIZE, file_sz - i * PAGE_SIZE),
+                        );
+                    }
+                }
+            }
+        });
+    }
     pub fn destroy(&mut self) {}
     pub fn get_envid(&self) -> usize {
         self.env_id
@@ -107,6 +146,32 @@ lazy_static! {
     static ref PRE_PGTABLE: Spinlock<Box<Pgtable>> = Spinlock::new(Box::new(Pgtable::new()));
 }
 
+fn map_pre_pgdir(envs: &Vec<Env>) {
+    let mut pre_pgtable = PRE_PGTABLE.lock();
+    pre_pgtable
+        .map_va_to_pa(
+            UENVS,
+            (envs.as_ptr() as usize).into(),
+            (envs.len() * size_of::<Env>() + PAGE_SIZE - 1) / PAGE_SIZE,
+            &Permssion::PTE_G,
+            false,
+        )
+        .unwrap();
+    let (pages_len, pages_vaddr) = {
+        let pages = crate::mm::page::PAGES.lock();
+        (pages.len(), pages.as_ptr() as usize)
+    };
+    pre_pgtable
+        .map_va_to_pa(
+            UPAGES,
+            pages_vaddr.into(),
+            (pages_len * size_of::<Page>() + PAGE_SIZE - 1) / PAGE_SIZE,
+            &Permssion::PTE_G,
+            false,
+        )
+        .unwrap();
+}
+
 pub fn env_init() {
     #[cfg(feature = "fit-cmos")]
     {
@@ -117,11 +182,11 @@ pub fn env_init() {
     let mut envs = ENV_LIST.lock();
     let mut env_free_list = ENV_FREE_LIST.lock();
     for i in 0..NENV {
-        let mut env = Env::new(i);
-        env.env_id = mkenvid(&env);
+        let env = Env::new(i);
         env_free_list.push(env.env_link.clone());
         envs.push(env);
     }
+    map_pre_pgdir(&envs);
 }
 
 #[inline(always)]
@@ -137,15 +202,10 @@ pub fn get_idx_by_envid(envid: usize) -> EnvIndex {
     return envid & (NENV - 1);
 }
 
-fn mkenvid(e: &Env) -> usize {
-    let envs = ENV_LIST.lock();
+fn mkenvid(idx: usize) -> usize {
     let mut locked_next_env_id = NEXT_ALLOC_ENV_ID.lock();
     let ret = *locked_next_env_id;
     *locked_next_env_id += 1;
-    let idx = envs
-        .iter()
-        .position(|x| x as *const Env == e as *const Env)
-        .unwrap();
     return ret << (1 + LOG2NENV) | idx;
 }
 
@@ -159,23 +219,28 @@ fn asid_alloc() -> Result<usize, &'static str> {
             return Ok(i);
         }
     }
-    return Err("No more free asid.\n");
+    return Err("No more free asid.");
 }
 
 fn env_alloc() -> Result<EnvIndex, &'static str> {
     let mut env_free_list = ENV_FREE_LIST.lock();
     let mut envs = ENV_LIST.lock();
     if env_free_list.head.is_none() {
-        return Err("No more free env.\n");
+        return Err("No more free env.");
     }
     let node = env_free_list.pop().unwrap();
     let idx = node.borrow().idx;
     envs[idx].env_status = EnvStatus::EnvRunnable;
+    envs[idx].env_id = mkenvid(idx);
+    envs[idx].env_asid = asid_alloc().unwrap();
+
     return Ok(idx);
 }
 
 pub fn env_create(elf_data: &[u8]) {
-    let env_idx = env_alloc().expect("Currently no more free env.");
+    let env_idx = env_alloc().unwrap();
     let mut envs = ENV_LIST.lock();
+    let mut env_sched_list = ENV_SCHED_LIST.lock();
     envs[env_idx].create(elf_data);
+    env_sched_list.push(envs[env_idx].env_sched_link.clone());
 }

@@ -13,12 +13,19 @@ pub struct PhysAddr {
     pub raw: usize,
 }
 
+impl From<VirtAddr> for PhysAddr {
+    fn from(va: VirtAddr) -> Self {
+        PhysAddr::new(va.raw)
+    }
+}
 
 impl Sub<VirtAddr> for VirtAddr {
     type Output = VirtAddr;
 
     fn sub(self, rhs: VirtAddr) -> Self::Output {
-        VirtAddr{raw :self.raw - rhs.raw}
+        VirtAddr {
+            raw: self.raw - rhs.raw,
+        }
     }
 }
 
@@ -84,6 +91,11 @@ impl VirtAddr {
     }
 
     #[inline(always)]
+    pub const fn zero() -> Self {
+        VirtAddr { raw: 0 }
+    }
+
+    #[inline(always)]
     pub fn get_vpn(&self) -> usize {
         self.raw >> PAGE_SHIFT
     }
@@ -109,6 +121,21 @@ impl VirtAddr {
     }
 }
 
+
+impl From<*mut u8> for PhysAddr {
+    fn from(raw: *mut u8) -> Self {
+        PhysAddr::new(raw as usize)
+    }
+
+}
+
+impl Into<*mut u8> for PhysAddr {
+    fn into(self) -> *mut u8 {
+        self.raw as *mut u8
+    }
+
+}
+
 impl PhysAddr {
     pub const fn new(raw: usize) -> Self {
         PhysAddr { raw }
@@ -118,9 +145,9 @@ impl PhysAddr {
         self.raw >> PAGE_SHIFT
     }
     #[inline(always)]
-    pub fn write<T>(&self, src: T) {
+    pub fn write<T>(&self, src: *const T, len: usize) {
         unsafe {
-            ptr::write(self.raw as *mut T, src);
+            ptr::copy_nonoverlapping(src as *const u8, self.raw as *mut u8, len);
         }
     }
     #[inline(always)]

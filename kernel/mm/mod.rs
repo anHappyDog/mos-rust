@@ -9,7 +9,7 @@ use alloc_macro::define_simple_allocator;
 
 use buddy::simple;
 
-const KERNEL_HEAP_SIZE: usize = 4096 * 1024;
+const KERNEL_HEAP_SIZE: usize = 4096 * 4096;
 
 #[define_simple_allocator(KERNEL_HEAP_SIZE)]
 static mut KERNEL_HEAP: [u8; KERNEL_HEAP_SIZE] = [0; KERNEL_HEAP_SIZE];
@@ -37,6 +37,7 @@ pub const UTEXT: VirtAddr = VirtAddr::new(PDMAP);
 pub const UCOW: VirtAddr = VirtAddr::new(0x3fe000);
 pub const UTEMP: VirtAddr = VirtAddr::new(0x3fd000);
 
+#[inline(always)]
 pub fn mem_init(mem_sz: usize) {
     page::page_init(mem_sz);
 }
