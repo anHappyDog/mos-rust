@@ -1,5 +1,4 @@
 #[repr(C)]
-#[derive(Clone, Copy)]
 pub struct Trapframe {
     pub regs: [usize; 32],
     pub status: usize,

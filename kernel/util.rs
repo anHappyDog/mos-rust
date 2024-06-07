@@ -1,7 +1,10 @@
 use core::cell::RefCell;
 
+use alloc::rc::Rc;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
+
+use crate::println;
 pub struct IndexStack {
     stack: Vec<usize>,
 }
@@ -21,14 +24,14 @@ impl IndexStack {
 }
 
 pub struct ListNode {
-    pub next: Option<Arc<RefCell<ListNode>>>,
-    pub prev: Option<Arc<RefCell<ListNode>>>,
+    pub next: Option<Rc<RefCell<ListNode>>>,
+    pub prev: Option<Rc<RefCell<ListNode>>>,
     pub idx: usize,
 }
 
 pub struct DoubleLinkedList {
-    pub head: Option<Arc<RefCell<ListNode>>>,
-    pub tail: Option<Arc<RefCell<ListNode>>>,
+    pub head: Option<Rc<RefCell<ListNode>>>,
+    pub tail: Option<Rc<RefCell<ListNode>>>,
 }
 
 impl ListNode {
@@ -48,7 +51,7 @@ impl DoubleLinkedList {
             tail: None,
         }
     }
-    pub fn push(&mut self, node: Arc<RefCell<ListNode>>) {
+    pub fn push(&mut self, node: Rc<RefCell<ListNode>>) {
         if self.head.is_none() {
             self.head = Some(node.clone());
             self.tail = Some(node);
@@ -59,24 +62,28 @@ impl DoubleLinkedList {
             self.tail = Some(node);
         }
     }
-    pub fn remove(&mut self, node: Arc<RefCell<ListNode>>) {
+    pub fn remove(&mut self, node: Rc<RefCell<ListNode>>) {
+        println!("remove node: {}", node.borrow().idx);
         let prev = node.borrow().prev.clone();
         let next = node.borrow().next.clone();
+        if prev.clone().is_none() && next.clone().is_none() {
+            return;
+        }
         if let Some(prev) = prev.clone() {
-            prev.borrow_mut().next = next.clone();
+            prev.borrow_mut().next.clone_from(&next);
         } else {
-            self.head = next.clone();
+            self.head.clone_from(&next);
         }
         if let Some(next) = next.clone() {
-            next.borrow_mut().prev = prev.clone();
+            next.borrow_mut().prev.clone_from(&prev);
         } else {
-            self.tail = prev.clone();
+            self.tail.clone_from(&prev);
         }
+        node.borrow_mut().next = None;
+        node.borrow_mut().prev = None;
     }
-    pub fn pop(&mut self) -> Option<Arc<RefCell<ListNode>>> {
-        if self.head.is_none() {
-            return None;
-        }
+    pub fn pop(&mut self) -> Option<Rc<RefCell<ListNode>>> {
+        self.head.as_ref()?;
         let head = self.head.take().unwrap();
         if let Some(next) = head.borrow().next.clone() {
             next.borrow_mut().prev = None;
@@ -85,6 +92,8 @@ impl DoubleLinkedList {
             self.tail = None;
             self.head = None;
         }
+        head.borrow_mut().next = None;
+        head.borrow_mut().prev = None;
         Some(head)
     }
 }
@@ -100,7 +109,7 @@ extern "C" fn memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 {
         }
         i += 1;
     }
-    return 0;
+    0
 }
 
 #[no_mangle]
@@ -122,5 +131,5 @@ extern "C" fn memmove(dst: *mut u8, src: *const u8, n: usize) -> *mut u8 {
             i -= 1;
         }
     }
-    return dst;
+    dst
 }

@@ -5,14 +5,16 @@ use crate::{
         pgtable::{Permssion, PgtableEntry},
         KSEG0, UENVS, UPAGES, USTACKTOP, UTEMP, UVPT, UXSTACKTOP,
     },
+    println,
     proc::{Env, CUR_ENV, ENV_LIST},
     trap::trapframe,
 };
-use core::mem::{copy, size_of};
+use core::mem::size_of;
 use mips32::{cp0, Reg};
 
 pub(super) fn do_tlb_mod(trapframe: &mut trapframe::Trapframe) {
-    let tmp_tf = copy(trapframe);
+    let tmp_tf = VirtAddr::from(trapframe as *const trapframe::Trapframe as usize)
+        .read::<trapframe::Trapframe>();
     if trapframe.regs[29] < USTACKTOP.raw || trapframe.regs[29] >= UXSTACKTOP.raw {
         trapframe.regs[29] = UXSTACKTOP.raw;
     }
@@ -20,7 +22,7 @@ pub(super) fn do_tlb_mod(trapframe: &mut trapframe::Trapframe) {
     VirtAddr::from(trapframe.regs[29]).write(tmp_tf);
     let curenv = {
         match CUR_ENV.lock().as_mut() {
-            Some(idx) => &mut ENV_LIST.lock()[*idx],
+            Some(idx) => &ENV_LIST.lock()[*idx],
             None => panic!("do_tlb_mod: no env to run"),
         }
     };
@@ -64,6 +66,7 @@ fn passive_alloc(env: &mut Env, va: VirtAddr) -> Result<(), &'static str> {
 // #[inline(always)]
 fn do_tlb_refill(trapframe: &mut trapframe::Trapframe) {
     let badvaddr = trapframe.badvaddr;
+    println!("do_tlb_refill,the badvaddr is {:x}\n", badvaddr);
     let asid = trapframe.hi & 0xff;
     mips32::tlb::tlb_invalidate(badvaddr, asid);
     let cur_env_idx = CUR_ENV.lock();
@@ -85,7 +88,7 @@ fn do_tlb_refill(trapframe: &mut trapframe::Trapframe) {
             }
         };
     }
-    let ppte = (ptentry as *const PgtableEntry as usize & !0x7) as usize;
+    let ppte = ptentry as *const PgtableEntry as usize & !0x7;
     let lo0 = VirtAddr::from(ppte).read::<usize>() >> 6;
     let lo1 = VirtAddr::from(ppte + size_of::<PgtableEntry>()).read::<usize>() >> 6;
     cp0::entrylo0::write(lo0);

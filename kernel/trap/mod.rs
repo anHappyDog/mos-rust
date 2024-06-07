@@ -2,24 +2,35 @@ pub mod int;
 pub mod syscall;
 pub mod tlb;
 pub mod trapframe;
-use core::{
-    arch::{self, global_asm},
-    usize,
-};
-use int::{enable_interrupt, enable_timer_interrupt, TIME_INTERVAL};
 
+#[allow(dead_code)]
 pub const E_UNSPECIFIED: i32 = 1;
+
+#[allow(dead_code)]
 pub const E_BAD_ENV: i32 = 2;
+
+#[allow(dead_code)]
 pub const E_INVAL: i32 = 3;
+
+#[allow(dead_code)]
 pub const E_NO_MEM: i32 = 4;
+#[allow(dead_code)]
 pub const E_NO_SYS: i32 = 5;
+#[allow(dead_code)]
 pub const E_NO_FREE_ENV: i32 = 6;
+#[allow(dead_code)]
 pub const E_IPC_NOT_RECV: i32 = 7;
+#[allow(dead_code)]
 pub const E_NO_DISK: i32 = 8;
+#[allow(dead_code)]
 pub const E_MAX_OPEN: i32 = 9;
+#[allow(dead_code)]
 pub const E_NOT_FOUND: i32 = 10;
+#[allow(dead_code)]
 pub const E_BAD_PATH: i32 = 11;
+#[allow(dead_code)]
 pub const E_FILE_EXISTS: i32 = 12;
+#[allow(dead_code)]
 pub const E_NOT_EXEC: i32 = 13;
 
 const EXC_CODE_INT: usize = 0;
@@ -41,8 +52,7 @@ const EXC_CODE_C2E: usize = 18;
 
 #[no_mangle]
 pub fn trap_init() {
-    enable_interrupt();
-    enable_timer_interrupt();
+    int::enable_interrupt();
 }
 
 fn do_c2e(trapframe: &mut trapframe::Trapframe) {

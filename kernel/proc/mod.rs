@@ -1,5 +1,7 @@
 pub mod sched;
 use crate::mm::USTACKTOP;
+use crate::mm::UTOP;
+use crate::mm::UVPT;
 use crate::trap::int::TIME_INTERVAL;
 
 use crate::mm::addr::VirtAddr;
@@ -15,6 +17,7 @@ use crate::trap::trapframe::Trapframe;
 use crate::util::DoubleLinkedList;
 use crate::util::ListNode;
 use alloc::boxed::Box;
+use alloc::rc::Rc;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::arch;
@@ -36,7 +39,7 @@ pub struct Env {
     pub env_tf: trapframe::Trapframe,
 
     //padding for env_link 8B
-    pub env_link: Arc<RefCell<ListNode>>,
+    pub env_link: Rc<RefCell<ListNode>>,
     env_padding1: [u8; 4],
     //
     pub env_id: usize,
@@ -46,7 +49,7 @@ pub struct Env {
     pub env_pgdir: Box<Pgtable>,
 
     // padding for env_sched_link 8B
-    pub env_sched_link: Arc<RefCell<ListNode>>,
+    pub env_sched_link: Rc<RefCell<ListNode>>,
     pub env_cur_runs: isize,
     pub env_pri: usize,
     pub env_ipc_value: usize,
@@ -61,17 +64,17 @@ pub struct Env {
 #[repr(C)]
 #[derive(PartialEq)]
 pub enum EnvStatus {
-    EnvFree = 0,
-    EnvRunnable = 1,
-    EnvNotRunnable = 2,
+    Free = 0,
+    Runnable = 1,
+    NotRunnable = 2,
 }
 
 impl From<usize> for EnvStatus {
     fn from(value: usize) -> Self {
         match value {
-            0 => EnvStatus::EnvFree,
-            1 => EnvStatus::EnvRunnable,
-            2 => EnvStatus::EnvNotRunnable,
+            0 => EnvStatus::Free,
+            1 => EnvStatus::Runnable,
+            2 => EnvStatus::NotRunnable,
             _ => panic!("Invalid EnvStatus.\n"),
         }
     }
@@ -81,12 +84,12 @@ impl Env {
     pub fn new(idx: usize) -> Self {
         Self {
             env_tf: trapframe::Trapframe::new(),
-            env_link: Arc::new(RefCell::new(ListNode::new(idx))),
+            env_link: Rc::new(RefCell::new(ListNode::new(idx))),
             env_id: 0,
             env_asid: 0,
-            env_status: EnvStatus::EnvFree,
+            env_status: EnvStatus::Free,
             env_pgdir: Box::new(Pgtable::new()),
-            env_sched_link: Arc::new(RefCell::new(ListNode::new(idx))),
+            env_sched_link: Rc::new(RefCell::new(ListNode::new(idx))),
             env_pri: 0,
             env_ipc_value: 0,
             env_ipc_from: 0,
@@ -110,10 +113,10 @@ impl Env {
             if ph.get_type() != elf::PT_LOAD {
                 return;
             }
-            let va = VirtAddr::new(ph.get_vaddr() as usize);
-            let memsz = ph.get_memsz() as usize;
-            let file_offset = ph.get_offset() as usize;
-            let file_sz = ph.get_filesz() as usize;
+            let va = VirtAddr::new(ph.get_vaddr());
+            let memsz = ph.get_memsz();
+            let file_offset = ph.get_offset();
+            let file_sz = ph.get_filesz();
             let perm = Permssion::PTE_V | Permssion::PTE_D;
             for i in 0..memsz.div_ceil(PAGE_SIZE) {
                 let (_, page_pa) = page_alloc().unwrap();
@@ -134,16 +137,15 @@ impl Env {
         });
         self.env_id = mkenvid(self.env_link.borrow().idx);
         self.env_asid = asid_alloc().unwrap();
-        self.env_status = EnvStatus::EnvRunnable;
-        self.env_tf.epc = elf_header.get_entry() as usize;
+        self.env_status = EnvStatus::Runnable;
+        self.env_tf.set_epc(elf_header.get_entry());
         self.env_tf.regs[29] = USTACKTOP.raw - size_of::<usize>() * 2;
-        self.env_tf.status = ST_IM7 | ST_IE | ST_EXL | ST_UM;
+        self.env_tf.set_status(ST_IM7 | ST_IE | ST_EXL | ST_UM);
     }
     pub fn destroy(&mut self) {}
     pub fn get_envid(&self) -> usize {
         self.env_id
     }
-
 }
 pub const NASID: usize = 256;
 pub const LOG2NENV: usize = 10;
@@ -163,13 +165,13 @@ lazy_static! {
     static ref PRE_PGTABLE: Spinlock<Box<Pgtable>> = Spinlock::new(Box::new(Pgtable::new()));
 }
 
-fn map_pre_pgdir(envs: &Vec<Env>) {
+fn map_pre_pgdir(envs: &[Env]) {
     let mut pre_pgtable = PRE_PGTABLE.lock();
     pre_pgtable
         .map_va_to_pa(
             UENVS,
             (envs.as_ptr() as usize).into(),
-            (envs.len() * size_of::<Env>() + PAGE_SIZE - 1) / PAGE_SIZE,
+            (NENV * size_of::<Env>() + PAGE_SIZE - 1) / PAGE_SIZE,
             &Permssion::PTE_G,
             false,
         )
@@ -216,14 +218,14 @@ pub fn get_idx_by_envid(envid: usize) -> EnvIndex {
             panic!("No current env.\n");
         }
     }
-    return envid & (NENV - 1);
+    envid & (NENV - 1)
 }
 
 fn mkenvid(idx: usize) -> usize {
     let mut locked_next_env_id = NEXT_ALLOC_ENV_ID.lock();
     let ret = *locked_next_env_id;
     *locked_next_env_id += 1;
-    return ret << (1 + LOG2NENV) | idx;
+    ret << (1 + LOG2NENV) | idx
 }
 
 fn asid_alloc() -> Result<usize, &'static str> {
@@ -236,24 +238,29 @@ fn asid_alloc() -> Result<usize, &'static str> {
             return Ok(i);
         }
     }
-    return Err("No more free asid.");
+    Err("No more free asid.")
 }
 
-fn env_alloc() -> Result<EnvIndex, &'static str> {
+pub fn env_alloc(parent_id: Option<usize>) -> Result<EnvIndex, &'static str> {
     let node = ENV_FREE_LIST.lock().pop().expect("No more free env.");
     let idx = node.borrow().idx;
     let env = &mut ENV_LIST.lock()[idx];
-    env.env_status = EnvStatus::EnvRunnable;
+    env.env_status = EnvStatus::Runnable;
     env.env_id = mkenvid(idx);
     env.env_asid = asid_alloc().unwrap();
-
-    return Ok(idx);
+    env.env_parent_id = parent_id.unwrap_or(0);
+    env.env_runs = 0;
+    let pre_table = PRE_PGTABLE.lock();
+    for i in (UTOP.raw >> 22)..(UVPT.raw >> 22) {
+        env.env_pgdir.entries[i] = pre_table.entries[i];
+    }
+    Ok(idx)
 }
 
 pub const DEFAULT_PRIO: usize = 1;
 
 pub fn env_create(elf_data: &[u8]) {
-    let env_idx = env_alloc().unwrap();
+    let env_idx = env_alloc(None).unwrap();
     let mut envs = ENV_LIST.lock();
     let mut env_sched_list = ENV_SCHED_LIST.lock();
     envs[env_idx].create(elf_data);

@@ -4,39 +4,27 @@ use mips32::{
     Reg,
 };
 
-pub const TIME_INTERVAL: usize = 0x10000000;
+pub const TIME_INTERVAL: usize = 500000;
 
 pub(super) fn do_interrupt(trapframe: &mut Trapframe) {
-    let cause = trapframe.cause;
+    let cause = trapframe.get_cause();
     if cause & ST_IM7 != 0 {
         schedule(false);
-    } else if cause & ST_IM6 != 0 {
-        panic!("do_interrupt: unexpected interrupt, cause: {:x}", cause);
-    } else if cause & ST_IM5 != 0 {
-        panic!("do_interrupt: unexpected interrupt, cause: {:x}", cause);
-    } else if cause & ST_IM4 != 0 {
-        panic!("do_interrupt: unexpected interrupt, cause: {:x}", cause);
-    } else if cause & ST_IM3 != 0 {
-        panic!("do_interrupt: unexpected interrupt, cause: {:x}", cause);
-    } else if cause & ST_IM2 != 0 {
-        panic!("do_interrupt: unexpected interrupt, cause: {:x}", cause);
-    } else if cause & ST_IM1 != 0 {
-        panic!("do_interrupt: unexpected interrupt, cause: {:x}", cause);
-    } else if cause & ST_IM0 != 0 {
-        panic!("do_interrupt: unexpected interrupt, cause: {:x}", cause);
     } else {
         panic!("do_interrupt: unexpected interrupt, cause: {:x}", cause);
-    }
+    } 
 }
 
-pub(super) fn enable_timer_interrupt() {
-    sr::write(sr::read() | ST_IM7);
+pub fn enable_timer_interrupt() {
     cp0::count::write(0);
     cp0::compare::write(TIME_INTERVAL);
+    sr::write(sr::read() | ST_IM7);
 }
 
-pub(super) fn enable_interrupt() {
+pub fn enable_interrupt() {
     sr::write(sr::read() | ST_IE);
 }
 
-pub(super) fn disable_timer_interrupt() {}
+pub fn disable_timer_interrupt() {
+    sr::write(sr::read() & !ST_IM7);
+}

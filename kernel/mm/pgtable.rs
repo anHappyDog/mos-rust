@@ -8,7 +8,7 @@ use super::{
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Pgtable {
-    entries: [PgtableEntry; 1024],
+    pub entries: [PgtableEntry; 1024],
 }
 
 #[repr(C)]

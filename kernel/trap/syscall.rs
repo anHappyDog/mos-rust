@@ -7,10 +7,12 @@ use crate::mm::UTOP;
 use crate::mm::{KSEG1, UTEMP};
 use crate::proc::sched::schedule;
 use crate::proc::{
-    get_idx_by_envid, Env, EnvIndex, EnvStatus, CUR_ENV, ENV_FREE_LIST, ENV_LIST, ENV_SCHED_LIST,
+    env_create, get_idx_by_envid, Env, EnvIndex, EnvStatus, CUR_ENV, ENV_FREE_LIST, ENV_LIST,
+    ENV_SCHED_LIST,
 };
 use crate::trap::E_INVAL;
 use crate::{dev, print};
+use crate::{println, proc};
 use core::mem::size_of;
 use core::ops::Add;
 
@@ -36,14 +38,14 @@ const MAX_SYSNO: usize = 18;
 
 fn sys_putchar(c: u32) -> i32 {
     NS16550A.putchar(c);
-    return 0;
+    0
 }
 
 fn sys_print_cons(s: VirtAddr, num: usize) -> i32 {
     for i in 0..num {
         NS16550A.putchar(s.add(i).read::<u8>().into());
     }
-    return 0;
+    0
 }
 
 #[inline(always)]
@@ -61,7 +63,7 @@ fn sys_write_dev(va: VirtAddr, pa: PhysAddr, len: usize) -> i32 {
     } else {
         return -E_INVAL;
     }
-    return 0;
+    0
 }
 
 fn sys_read_dev(va: VirtAddr, pa: PhysAddr, len: usize) -> i32 {
@@ -77,7 +79,7 @@ fn sys_read_dev(va: VirtAddr, pa: PhysAddr, len: usize) -> i32 {
     } else {
         return -E_INVAL;
     }
-    return 0;
+    0
 }
 
 fn sys_getenvid() -> i32 {
@@ -87,7 +89,7 @@ fn sys_getenvid() -> i32 {
     if let Some(env_idx) = *locked_cur_env_idx {
         envid = locked_envs[env_idx].get_envid();
     }
-    return envid as i32;
+    envid as i32
 }
 
 fn sys_yield() -> ! {
@@ -97,26 +99,29 @@ fn sys_yield() -> ! {
 
 fn sys_env_destroy(envid: usize) -> i32 {
     let idx = get_idx_by_envid(envid);
-    let env: &mut Env = { &mut ENV_LIST.lock()[idx] };
-    env.env_status = EnvStatus::EnvFree;
-    let mut env_free_list = ENV_FREE_LIST.lock();
-    env_free_list.push(env.env_link.clone());
+    println!("sys_env_destroy: idx = {:x}\n", idx);
+    let mut env_list = ENV_LIST.lock();
+    let env: &mut Env = &mut env_list[idx];
+    env.env_status = EnvStatus::Free;
+    ENV_SCHED_LIST.lock().remove(env.env_sched_link.clone());
+    ENV_FREE_LIST.lock().push(env.env_link.clone());
     let mut curenv = CUR_ENV.lock();
     if let Some(curidx) = *curenv {
         if curidx == idx {
-            *curenv = None;
+            curenv.take().unwrap();
             drop(curenv);
-            schedule(true);
+            drop(env_list);
+            schedule(false);
         }
     }
-    return 0;
+    0
 }
 
 fn sys_set_tlb_mod_entry(envid: usize, func: usize) -> i32 {
     let idx = get_idx_by_envid(envid);
     let mut envs = ENV_LIST.lock();
     envs[idx].env_user_tlb_mod_entry = func;
-    return 0;
+    0
 }
 
 fn sys_mem_alloc(envid: usize, va: VirtAddr, perm: Permssion) -> i32 {
@@ -128,10 +133,10 @@ fn sys_mem_alloc(envid: usize, va: VirtAddr, perm: Permssion) -> i32 {
     let env = &mut envs[idx];
     let (_, page_pa) = page_alloc().unwrap();
     let result = env.env_pgdir.map_va_to_pa(va, page_pa, 1, &perm, false);
-    if let Ok(_) = result {
-        return 0;
+    if result.is_ok() {
+        0
     } else {
-        return -E_INVAL;
+        -E_INVAL
     }
 }
 
@@ -157,10 +162,10 @@ fn sys_mem_map(
     };
     let dstenv = &mut envs[dstidx];
     let result = dstenv.env_pgdir.map_va_to_pa(dstva, pa, 1, &flags, false);
-    if let Ok(_) = result {
-        return 0;
+    if result.is_ok() {
+        0
     } else {
-        return -E_INVAL;
+        -E_INVAL
     }
 }
 
@@ -171,28 +176,61 @@ fn sys_mem_unmap(envid: EnvIndex, va: VirtAddr) -> i32 {
     let idx = get_idx_by_envid(envid);
     let mut envs = ENV_LIST.lock();
     let env = &mut envs[idx];
-    if let Ok(_) = env.env_pgdir.unmap_va(va) {
-        return 0;
+    if env.env_pgdir.unmap_va(va).is_ok() {
+        0
     } else {
-        return -E_INVAL;
+        -E_INVAL
     }
 }
 
 fn sys_exofork() -> i32 {
-    panic!("sys_exofork: not implemented");
+    let (env_parent_id, env_pri) = {
+        let envs = ENV_LIST.lock();
+        let curenv_idx = CUR_ENV.lock();
+        let curenv = match *curenv_idx {
+            Some(curidx) => &envs[curidx],
+            None => panic!("sys_exofork: no curenv"),
+        };
+        (curenv.env_id, curenv.env_pri)
+    };
+    let idx = proc::env_alloc(Some(env_parent_id)).expect("sys_exofork: env_alloc failed");
+    let mut envs = ENV_LIST.lock();
+    let env = &mut envs[idx];
+    unsafe {
+        core::ptr::copy_nonoverlapping(
+            (&stack_end as *const usize as *const Trapframe as usize - size_of::<Trapframe>())
+                as *const Trapframe,
+            &mut env.env_tf as *mut Trapframe,
+            1,
+        );
+    }
+    env.env_tf.regs[2] = 0;
+    env.env_status = EnvStatus::NotRunnable;
+    env.env_pri = env_pri;
+    env.env_id as i32
 }
 
 fn sys_set_env_status(envid: usize, status: EnvStatus) -> i32 {
-    if status != EnvStatus::EnvFree
-        && status != EnvStatus::EnvRunnable
-        && status != EnvStatus::EnvNotRunnable
+    if status != EnvStatus::Free
+        && status != EnvStatus::Runnable
+        && status != EnvStatus::NotRunnable
     {
         return -E_INVAL;
     }
     let idx = get_idx_by_envid(envid);
     let mut envs = ENV_LIST.lock();
+    {
+        if envs[idx].env_status != EnvStatus::Runnable && status == EnvStatus::Runnable {
+            let mut env_sched_list = ENV_SCHED_LIST.lock();
+            env_sched_list.push(envs[idx].env_sched_link.clone());
+        } else if envs[idx].env_status == EnvStatus::Runnable && status != EnvStatus::Runnable
+        {
+            let mut env_sched_list = ENV_SCHED_LIST.lock();
+            env_sched_list.remove(envs[idx].env_sched_link.clone());
+        }
+    }
     envs[idx].env_status = status;
-    return 0;
+    0
 }
 
 fn sys_set_trapframe(envid: usize, tf: VirtAddr) -> i32 {
@@ -207,14 +245,14 @@ fn sys_set_trapframe(envid: usize, tf: VirtAddr) -> i32 {
             envs[idx].env_tf = tf.read();
         } else {
             unsafe {
-                VirtAddr::new(stack_end as usize - size_of::<Trapframe>())
+                VirtAddr::new(&stack_end as *const usize as usize - size_of::<Trapframe>())
                     .write(tf.read::<Trapframe>());
             }
         }
     } else {
         panic!("sys_set_trapframe: no curenv");
     }
-    return 0;
+    0
 }
 
 fn sys_panic(msg: VirtAddr) -> ! {
@@ -242,12 +280,12 @@ fn sys_ipc_recv(dstva: VirtAddr) -> i32 {
         let curenv = &mut envs[curidx];
         curenv.env_ipc_dstva = dstva;
         curenv.env_ipc_recving = 1;
-        curenv.env_status = EnvStatus::EnvNotRunnable;
+        curenv.env_status = EnvStatus::NotRunnable;
         schedule(true);
     } else {
         panic!("sys_ipc_recv: no curenv");
     }
-    return 0;
+    0
 }
 
 fn sys_ipc_try_send(envid: usize, val: usize, srcva: VirtAddr, perm: Permssion) -> i32 {
@@ -264,7 +302,7 @@ fn sys_ipc_try_send(envid: usize, val: usize, srcva: VirtAddr, perm: Permssion) 
     env.env_ipc_from = curenv.env_id;
     env.env_ipc_perm = perm | Permssion::PTE_V;
     env.env_ipc_recving = 0;
-    env.env_status = EnvStatus::EnvRunnable;
+    env.env_status = EnvStatus::Runnable;
     if srcva == VirtAddr::zero() {
         return 0;
     }
@@ -273,13 +311,13 @@ fn sys_ipc_try_send(envid: usize, val: usize, srcva: VirtAddr, perm: Permssion) 
             let result = env
                 .env_pgdir
                 .map_va_to_pa(env.env_ipc_dstva, pa, 1, &perm, false);
-            if let Ok(_) = result {
-                return 0;
+            if result.is_ok() {
+                0
             } else {
-                return -E_INVAL;
+                -E_INVAL
             }
         }
-        _ => return -E_INVAL,
+        _ => -E_INVAL,
     }
 }
 
@@ -295,7 +333,7 @@ fn sys_cgetc() -> i32 {
 
 #[inline(always)]
 fn is_illegal_va(va: VirtAddr) -> bool {
-    return va < UTEMP || va >= UTOP;
+    va < UTEMP || va >= UTOP
 }
 
 const VALID_ADDR_SPACE_NUM: usize = 2;
@@ -315,14 +353,15 @@ fn is_illegal_dev_range(pa: PhysAddr, len: usize) -> bool {
             return false;
         }
     }
-    return true;
+    true
 }
 
+#[inline(always)]
 fn is_illegal_va_range(va: VirtAddr, len: usize) -> bool {
     if len == 0 {
         return false;
     }
-    return (va + len) < va || va < UTEMP || (va + len) > UTOP;
+    (va + len) < va || va < UTEMP || (va + len) > UTOP
 }
 
 pub fn do_syscall(trapframe: &mut Trapframe) {

@@ -16,7 +16,6 @@ pub const PAGE_SIZE: usize = 1 << PAGE_SHIFT;
 type PageIndex = usize;
 
 #[repr(C)]
-#[derive(Clone, Copy)]
 pub struct Page {
     p_no: u32,
     p_pa: PhysAddr,
@@ -68,7 +67,7 @@ pub(super) fn page_init(mem_sz: usize) {
 
 #[inline(always)]
 pub fn get_page_index_by_kvaddr(kvaddr: VirtAddr) -> Option<PageIndex> {
-    Some(kvaddr.sub(KSEG0).raw.checked_div(PAGE_SIZE)?)
+    kvaddr.sub(KSEG0).raw.checked_div(PAGE_SIZE)
 }
 
 pub fn page_alloc() -> Option<(PageIndex, PhysAddr)> {

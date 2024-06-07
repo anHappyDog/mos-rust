@@ -15,7 +15,7 @@ once_cell = { version = "1.19.0", default-features = false, features = [
 
     "alloc",
 ] }
-lazy_static = {version = "1.4.0",default-features = false,features = [
+lazy_static = { version = "1.4.0", default-features = false, features = [
 
     "spin_no_std",
 ] }
