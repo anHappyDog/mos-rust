@@ -1,10 +1,10 @@
-use crate::{println, proc::sched::schedule, trap::trapframe::Trapframe};
+use crate::{ proc::sched::schedule, trap::trapframe::Trapframe};
 use mips32::{
-    cp0::{self, sr, ST_IE, ST_IM0, ST_IM1, ST_IM2, ST_IM3, ST_IM4, ST_IM5, ST_IM6, ST_IM7},
+    cp0::{self, sr, ST_IE, ST_IM7},
     Reg,
 };
 
-pub const TIME_INTERVAL: usize = 500000;
+pub const TIME_INTERVAL: usize = 2000000;
 
 pub(super) fn do_interrupt(trapframe: &mut Trapframe) {
     let cause = trapframe.get_cause();

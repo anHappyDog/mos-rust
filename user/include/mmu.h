@@ -65,9 +65,6 @@
 // Shared memmory. Reserved for software, used by fork.
 #define PTE_LIBRARY 0x0002
 
-// Swap bit.
-#define PTE_SWAP 0x0008
-
 // Memory segments (32-bit kernel mode addresses)
 #define KUSEG 0x00000000U
 #define KSEG0 0x80000000U
@@ -149,9 +146,43 @@
 #include <string.h>
 #include <types.h>
 
+extern u_long npage;
+
 typedef u_long Pde;
 typedef u_long Pte;
 
+#define PADDR(kva)                                                                                 \
+	({                                                                                         \
+		u_long _a = (u_long)(kva);                                                         \
+		if (_a < ULIM)                                                                     \
+			panic("PADDR called with invalid kva %08lx", _a);                          \
+		_a - ULIM;                                                                         \
+	})
 
+// translates from physical address to kernel virtual address
+#define KADDR(pa)                                                                                  \
+	({                                                                                         \
+		u_long _ppn = PPN(pa);                                                             \
+		if (_ppn >= npage) {                                                               \
+			panic("KADDR called with invalid pa %08lx", (u_long)pa);                   \
+		}                                                                                  \
+		(pa) + ULIM;                                                                       \
+	})
+
+#define assert(x)                                                                                  \
+	do {                                                                                       \
+		if (!(x)) {                                                                        \
+			panic("assertion failed: %s", #x);                                         \
+		}                                                                                  \
+	} while (0)
+
+#define TRUP(_p)                                                                                   \
+	({                                                                                         \
+		typeof((_p)) __m_p = (_p);                                                         \
+		(u_int) __m_p > ULIM ? (typeof(_p))ULIM : __m_p;                                   \
+	})
+
+extern void tlb_out(u_int entryhi);
+void tlb_invalidate(u_int asid, u_long va);
 #endif //!__ASSEMBLER__
 #endif // !_MMU_H_

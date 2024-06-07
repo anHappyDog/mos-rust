@@ -1,4 +1,4 @@
-use core::{ops::Add, ptr};
+use core::ops::Add;
 
 use lazy_static::lazy_static;
 
@@ -11,6 +11,7 @@ const MALTA_SERIAL_DATA_READY: u8 = 0x1;
 const MALTA_SERIAL_THR_EMPTY: u8 = 0x20;
 
 pub trait Uart {
+    #[allow(unused)]
     fn init(&mut self, base: VirtAddr, size: usize);
     fn putchar(&self, c: u32);
     fn getchar(&self) -> u32;

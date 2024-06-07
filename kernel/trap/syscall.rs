@@ -1,14 +1,13 @@
 use super::trapframe::Trapframe;
 use crate::dev::uart::{Uart, NS16550A};
-use crate::mm::addr::{PhysAddr, VirtAddr};
-use crate::mm::page::{page_alloc, stack_end};
+use crate::mm::addr::{pa_to_kva, PhysAddr, VirtAddr};
+use crate::mm::page::{get_page_index_by_kvaddr, page_alloc, page_incref, stack_end, PAGES};
 use crate::mm::pgtable::Permssion;
+use crate::mm::UTEMP;
 use crate::mm::UTOP;
-use crate::mm::{KSEG1, UTEMP};
 use crate::proc::sched::schedule;
 use crate::proc::{
-    env_create, get_idx_by_envid, Env, EnvIndex, EnvStatus, CUR_ENV, ENV_FREE_LIST, ENV_LIST,
-    ENV_SCHED_LIST,
+    get_idx_by_envid, Env, EnvIndex, EnvStatus, CUR_ENV, ENV_FREE_LIST, ENV_LIST, ENV_SCHED_LIST,
 };
 use crate::trap::E_INVAL;
 use crate::{dev, print};
@@ -34,7 +33,6 @@ const SYS_IPC_RECV: usize = 14;
 const SYS_CGETC: usize = 15;
 const SYS_WRITE_DEV: usize = 16;
 const SYS_READ_DEV: usize = 17;
-const MAX_SYSNO: usize = 18;
 
 fn sys_putchar(c: u32) -> i32 {
     NS16550A.putchar(c);
@@ -132,7 +130,9 @@ fn sys_mem_alloc(envid: usize, va: VirtAddr, perm: Permssion) -> i32 {
     let mut envs = ENV_LIST.lock();
     let env = &mut envs[idx];
     let (_, page_pa) = page_alloc().unwrap();
-    let result = env.env_pgdir.map_va_to_pa(va, page_pa, 1, &perm, false);
+    let result = env
+        .env_pgdir
+        .map_va_to_pa(va, page_pa, env.env_asid, 1, &perm, true);
     if result.is_ok() {
         0
     } else {
@@ -150,6 +150,7 @@ fn sys_mem_map(
     if is_illegal_va(srcva) || is_illegal_va(dstva) {
         return -E_INVAL;
     }
+    println!("sysmemmap : srcid: {:x}, srcva: {:x}, dstid: {:x}, dstva: {:x}, flags: {:x}\n", srcid, srcva.raw, dstid, dstva.raw, flags);
     let srcidx = get_idx_by_envid(srcid);
     let dstidx = get_idx_by_envid(dstid);
     let mut envs = ENV_LIST.lock();
@@ -161,7 +162,11 @@ fn sys_mem_map(
         }
     };
     let dstenv = &mut envs[dstidx];
-    let result = dstenv.env_pgdir.map_va_to_pa(dstva, pa, 1, &flags, false);
+    let result = dstenv
+        .env_pgdir
+        .map_va_to_pa(dstva, pa, dstenv.env_asid, 1, &flags, true);
+    let idx = get_page_index_by_kvaddr(pa_to_kva(pa)).unwrap();
+    page_incref(idx);
     if result.is_ok() {
         0
     } else {
@@ -194,12 +199,13 @@ fn sys_exofork() -> i32 {
         (curenv.env_id, curenv.env_pri)
     };
     let idx = proc::env_alloc(Some(env_parent_id)).expect("sys_exofork: env_alloc failed");
+
+    println!("new allocated env idx : {:x}", idx);
     let mut envs = ENV_LIST.lock();
     let env = &mut envs[idx];
     unsafe {
         core::ptr::copy_nonoverlapping(
-            (&stack_end as *const usize as *const Trapframe as usize - size_of::<Trapframe>())
-                as *const Trapframe,
+            (&stack_end as *const usize as usize - size_of::<Trapframe>()) as *const Trapframe,
             &mut env.env_tf as *mut Trapframe,
             1,
         );
@@ -223,8 +229,7 @@ fn sys_set_env_status(envid: usize, status: EnvStatus) -> i32 {
         if envs[idx].env_status != EnvStatus::Runnable && status == EnvStatus::Runnable {
             let mut env_sched_list = ENV_SCHED_LIST.lock();
             env_sched_list.push(envs[idx].env_sched_link.clone());
-        } else if envs[idx].env_status == EnvStatus::Runnable && status != EnvStatus::Runnable
-        {
+        } else if envs[idx].env_status == EnvStatus::Runnable && status != EnvStatus::Runnable {
             let mut env_sched_list = ENV_SCHED_LIST.lock();
             env_sched_list.remove(envs[idx].env_sched_link.clone());
         }
@@ -242,10 +247,10 @@ fn sys_set_trapframe(envid: usize, tf: VirtAddr) -> i32 {
     let curenv_idx = CUR_ENV.lock();
     if let Some(curidx) = *curenv_idx {
         if curidx != idx {
-            envs[idx].env_tf = tf.read();
+            envs[idx].env_tf = tf.read::<Trapframe>();
         } else {
             unsafe {
-                VirtAddr::new(&stack_end as *const usize as usize - size_of::<Trapframe>())
+                VirtAddr::from(&stack_end as *const usize as usize - size_of::<Trapframe>())
                     .write(tf.read::<Trapframe>());
             }
         }
@@ -308,9 +313,9 @@ fn sys_ipc_try_send(envid: usize, val: usize, srcva: VirtAddr, perm: Permssion) 
     }
     match curenv.env_pgdir.va_to_pa(srcva) {
         Some((_, pa)) => {
-            let result = env
-                .env_pgdir
-                .map_va_to_pa(env.env_ipc_dstva, pa, 1, &perm, false);
+            let result =
+                env.env_pgdir
+                    .map_va_to_pa(env.env_ipc_dstva, pa, env.env_asid, 1, &perm, false);
             if result.is_ok() {
                 0
             } else {

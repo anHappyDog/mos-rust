@@ -1,12 +1,10 @@
 use std::ffi::OsStr;
 use std::process::Command;
 use std::{env, fs, path::PathBuf};
-const CCLFAGS: &str = "--std=gnu99 -EL -G 0 -mno-abicalls -fno-pic
+const CCLFAGS: &str = "--std=gnu99 -EL -G 0 -g -mno-abicalls -fno-pic
     -ffreestanding -fno-stack-protector -fno-builtin -msoft-float
     -nostdlib -nostartfiles -nodefaultlibs -mno-shared
     -Wa,-xgot -Wall -mxgot -mno-fix-r4000 -march=4kc";
-
-const HOSTCFLAGS: &str = "--std=gnu99 -O2 -Wall";
 
 fn build_exc_entry() {
     cc::Build::new()
@@ -162,8 +160,7 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     let target = env::var("TARGET").unwrap();
 
-    match target.as_str() {
-        "mips32" => compile_cfiles_for_mips32(),
-        _ => {}
+    if target.as_str() == "mips32" {
+        compile_cfiles_for_mips32();
     }
 }

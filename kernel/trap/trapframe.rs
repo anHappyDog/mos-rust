@@ -1,4 +1,7 @@
+use core::{fmt::{Debug, Display}, ptr};
+
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Trapframe {
     pub regs: [usize; 32],
     pub status: usize,
@@ -7,6 +10,20 @@ pub struct Trapframe {
     pub badvaddr: usize,
     pub cause: usize,
     pub epc: usize,
+}
+
+impl Display for Trapframe {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "Trapframe {{ regs: [")?;
+        for i in 0..32 {
+            write!(f, "{:#x}, ", self.regs[i])?;
+        }
+        write!(
+            f,
+            "], status: {:#x}, hi: {:#x}, lo: {:#x}, badvaddr: {:#x}, cause: {:#x}, epc: {:#x} }}",
+            self.status, self.hi, self.lo, self.badvaddr, self.cause, self.epc
+        )
+    }
 }
 
 impl Trapframe {
@@ -36,23 +53,15 @@ impl Trapframe {
     }
     #[inline(always)]
     pub fn get_arg3(&self) -> usize {
-        unsafe { *(self.regs[29] as *const usize).offset(4) }
+        unsafe { ptr::read_unaligned((self.regs[29] as *const usize).offset(4)) }
     }
     #[inline(always)]
     pub fn get_arg4(&self) -> usize {
-        unsafe { *(self.regs[29] as *const usize).offset(5) }
-    }
-    #[inline(always)]
-    pub fn get_epc(&self) -> usize {
-        self.epc
+        unsafe { ptr::read_unaligned((self.regs[29] as *const usize).offset(5)) }
     }
     #[inline(always)]
     pub fn get_cause(&self) -> usize {
         self.cause
-    }
-    #[inline(always)]
-    pub fn get_status(&self) -> usize {
-        self.status
     }
     #[inline(always)]
     pub fn set_status(&mut self, status: usize) {

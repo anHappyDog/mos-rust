@@ -35,8 +35,6 @@
 #define MALTA_IDE_CMD_PIO_READ 0x20  /* Read sectors with retry */
 #define MALTA_IDE_CMD_PIO_WRITE 0x30 /* write sectors with retry */
 
-#define MALTA_IDE_SECONDARY_OFFSET (0xf0 - 0x70)
-
 /*
  * MALTA Power Management device definitions.
  */

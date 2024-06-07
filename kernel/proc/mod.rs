@@ -1,29 +1,31 @@
 pub mod sched;
-use crate::mm::USTACKTOP;
-use crate::mm::UTOP;
-use crate::mm::UVPT;
-use crate::trap::int::TIME_INTERVAL;
-
+use crate::mm::addr::kva_to_pa;
+use crate::mm::addr::pa_to_kva;
+use crate::mm::addr::PhysAddr;
 use crate::mm::addr::VirtAddr;
 use crate::mm::page::page_alloc;
 use crate::mm::page::Page;
 use crate::mm::page::PAGE_SIZE;
 use crate::mm::pgtable::Permssion;
 use crate::mm::pgtable::Pgtable;
+use crate::mm::pgtable::PgtableEntry;
+use crate::mm::KSEG0;
 use crate::mm::UENVS;
 use crate::mm::UPAGES;
+use crate::mm::USTACKTOP;
+use crate::mm::UTOP;
+use crate::mm::UVPT;
+use crate::println;
 use crate::trap::trapframe;
-use crate::trap::trapframe::Trapframe;
 use crate::util::DoubleLinkedList;
 use crate::util::ListNode;
 use alloc::boxed::Box;
 use alloc::rc::Rc;
-use alloc::sync::Arc;
 use alloc::vec::Vec;
-use core::arch;
 use core::cell::RefCell;
 use core::mem::size_of;
 use core::ops::Add;
+use core::ptr;
 use elf::ElfHeader;
 use elf::ProgramHeader;
 use lazy_static::lazy_static;
@@ -31,7 +33,6 @@ use mips32::cp0::ST_EXL;
 use mips32::cp0::ST_IE;
 use mips32::cp0::ST_IM7;
 use mips32::cp0::ST_UM;
-use mips32::{cp0, gpr, Reg};
 use sync::spin::Spinlock;
 
 #[repr(C)]
@@ -43,7 +44,7 @@ pub struct Env {
     env_padding1: [u8; 4],
     //
     pub env_id: usize,
-    env_asid: usize,
+    pub env_asid: usize,
     env_parent_id: usize,
     pub env_status: EnvStatus,
     pub env_pgdir: Box<Pgtable>,
@@ -81,27 +82,34 @@ impl From<usize> for EnvStatus {
 }
 
 impl Env {
-    pub fn new(idx: usize) -> Self {
-        Self {
-            env_tf: trapframe::Trapframe::new(),
-            env_link: Rc::new(RefCell::new(ListNode::new(idx))),
-            env_id: 0,
-            env_asid: 0,
-            env_status: EnvStatus::Free,
-            env_pgdir: Box::new(Pgtable::new()),
-            env_sched_link: Rc::new(RefCell::new(ListNode::new(idx))),
-            env_pri: 0,
-            env_ipc_value: 0,
-            env_ipc_from: 0,
-            env_ipc_recving: 0,
-            env_ipc_dstva: VirtAddr::new(0),
-            env_ipc_perm: Permssion::empty(),
-            env_user_tlb_mod_entry: 0,
-            env_runs: 0,
-            env_parent_id: 0,
-            env_padding1: [0; 4],
-            env_cur_runs: 0,
+    pub fn init(&mut self, idx: usize) {
+        self.env_tf = trapframe::Trapframe::new();
+
+        self.env_id = 0;
+        self.env_asid = 0;
+        self.env_status = EnvStatus::Free;
+        self.env_pgdir = Box::new(Pgtable::new());
+        unsafe {
+            ptr::write(
+                &mut self.env_link,
+                Rc::new(RefCell::new(ListNode::new(idx))),
+            );
+            ptr::write(
+                &mut self.env_sched_link,
+                Rc::new(RefCell::new(ListNode::new(idx))),
+            );
         }
+        self.env_pri = 0;
+        self.env_ipc_value = 0;
+        self.env_ipc_from = 0;
+        self.env_ipc_recving = 0;
+        self.env_ipc_dstva = VirtAddr::new(0);
+        self.env_ipc_perm = Permssion::empty();
+        self.env_user_tlb_mod_entry = 0;
+        self.env_runs = 0;
+        self.env_parent_id = 0;
+        self.env_padding1 = [0; 4];
+        self.env_cur_runs = 0;
     }
     pub fn create(&mut self, elf_data: &[u8]) {
         self.env_pri = DEFAULT_PRIO;
@@ -117,18 +125,28 @@ impl Env {
             let memsz = ph.get_memsz();
             let file_offset = ph.get_offset();
             let file_sz = ph.get_filesz();
-            let perm = Permssion::PTE_V | Permssion::PTE_D;
+            let mut perm = Permssion::empty();
+            if ph.get_flags() & elf::PF_W == elf::PF_W {
+                perm = Permssion::PTE_D;
+            }
             for i in 0..memsz.div_ceil(PAGE_SIZE) {
                 let (_, page_pa) = page_alloc().unwrap();
                 self.env_pgdir
                     .as_mut()
-                    .map_va_to_pa(va.add(i * PAGE_SIZE), page_pa, 1, &perm, false)
+                    .map_va_to_pa(
+                        va.add(i * PAGE_SIZE),
+                        page_pa,
+                        self.env_asid,
+                        1,
+                        &perm,
+                        false,
+                    )
                     .unwrap();
                 unsafe {
                     if i * PAGE_SIZE < file_sz {
                         core::ptr::copy(
                             elf_data.as_ptr().add(file_offset + i * PAGE_SIZE),
-                            page_pa.into(),
+                            pa_to_kva(page_pa).into(),
                             core::cmp::min(PAGE_SIZE, file_sz - i * PAGE_SIZE),
                         );
                     }
@@ -142,18 +160,35 @@ impl Env {
         self.env_tf.regs[29] = USTACKTOP.raw - size_of::<usize>() * 2;
         self.env_tf.set_status(ST_IM7 | ST_IE | ST_EXL | ST_UM);
     }
+    #[allow(dead_code)]
     pub fn destroy(&mut self) {}
     pub fn get_envid(&self) -> usize {
         self.env_id
     }
 }
 pub const NASID: usize = 256;
-pub const LOG2NENV: usize = 10;
+pub const LOG2NENV: usize = 4;
 pub const NENV: usize = 1 << LOG2NENV;
 pub type EnvIndex = usize;
 
+#[repr(C, align(4096))]
+#[derive(Clone, Copy)]
+struct PageBuffer {
+    buffer: [u8; PAGE_SIZE],
+}
+
+fn init_envs() -> Vec<Env> {
+    let mut t = Box::new(
+        [PageBuffer {
+            buffer: [0; PAGE_SIZE],
+        }; (NENV * size_of::<Env>() + PAGE_SIZE - 1) / PAGE_SIZE],
+    );
+    assert!(t.as_ptr() as usize % PAGE_SIZE == 0);
+    unsafe { Vec::from_raw_parts(t.as_mut_ptr() as usize as *mut Env, NENV, NENV) }
+}
+
 lazy_static! {
-    pub static ref ENV_LIST: Spinlock<Vec<Env>> = Spinlock::new(Vec::new());
+    pub static ref ENV_LIST: Spinlock<Vec<Env>> = Spinlock::new(init_envs());
     pub static ref CUR_ENV: Spinlock<Option<EnvIndex>> = Spinlock::new(None);
     pub static ref ENV_FREE_LIST: Spinlock<DoubleLinkedList> =
         Spinlock::new(DoubleLinkedList::new());
@@ -165,12 +200,13 @@ lazy_static! {
     static ref PRE_PGTABLE: Spinlock<Box<Pgtable>> = Spinlock::new(Box::new(Pgtable::new()));
 }
 
-fn map_pre_pgdir(envs: &[Env]) {
+fn map_pre_pgdir(envs: *const Env) {
     let mut pre_pgtable = PRE_PGTABLE.lock();
     pre_pgtable
         .map_va_to_pa(
             UENVS,
-            (envs.as_ptr() as usize).into(),
+            (envs as usize - KSEG0.raw).into(),
+            0,
             (NENV * size_of::<Env>() + PAGE_SIZE - 1) / PAGE_SIZE,
             &Permssion::PTE_G,
             false,
@@ -180,10 +216,15 @@ fn map_pre_pgdir(envs: &[Env]) {
         let pages = crate::mm::page::PAGES.lock();
         (pages.len(), pages.as_ptr() as usize)
     };
+    println!(
+        "envs's addr is {:x},pages' addr is {:x}",
+        envs as usize, pages_vaddr
+    );
     pre_pgtable
         .map_va_to_pa(
             UPAGES,
-            pages_vaddr.into(),
+            (pages_vaddr - KSEG0.raw).into(),
+            0,
             (pages_len * size_of::<Page>() + PAGE_SIZE - 1) / PAGE_SIZE,
             &Permssion::PTE_G,
             false,
@@ -192,20 +233,15 @@ fn map_pre_pgdir(envs: &[Env]) {
 }
 
 pub fn env_init() {
-    #[cfg(feature = "fit-cmos")]
-    {
-        assert!(LOG2NENV == 10);
-        assert!(size_of::<Env>() == 0xdc);
-        assert!(size_of::<Trapframe>() == 0x98);
-    }
     let mut envs = ENV_LIST.lock();
     let mut env_free_list = ENV_FREE_LIST.lock();
     for i in 0..NENV {
-        let env = Env::new(i);
+        let env = &mut envs[i];
+        env.init(i);
         env_free_list.push(env.env_link.clone());
-        envs.push(env);
     }
-    map_pre_pgdir(&envs);
+
+    map_pre_pgdir(envs.as_ptr());
 }
 
 #[inline(always)]
@@ -230,7 +266,7 @@ fn mkenvid(idx: usize) -> usize {
 
 fn asid_alloc() -> Result<usize, &'static str> {
     let mut locked_asid_bitmap = ASID_BITMAP.lock();
-    for i in 0..NASID {
+    for i in 1..NASID {
         let index = i >> 5;
         let inner = i & 31;
         if locked_asid_bitmap[index] & (1 << inner) == 0 {
@@ -254,6 +290,10 @@ pub fn env_alloc(parent_id: Option<usize>) -> Result<EnvIndex, &'static str> {
     for i in (UTOP.raw >> 22)..(UVPT.raw >> 22) {
         env.env_pgdir.entries[i] = pre_table.entries[i];
     }
+    env.env_pgdir.entries[UVPT.raw >> 22].set(
+        kva_to_pa(VirtAddr::from(env.env_pgdir.entries.as_ptr() as usize)),
+        &Permssion::PTE_V,
+    );
     Ok(idx)
 }
 

@@ -1,6 +1,6 @@
 use crate::dev;
+use crate::dev::uart::Uart;
 use crate::dev::uart::NS16550A;
-use crate::dev::uart::{self, Uart, MALTA_SERIAL_BASE};
 use core::fmt::{self, Write};
 use core::panic;
 use lazy_static::lazy_static;

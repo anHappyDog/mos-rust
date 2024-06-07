@@ -22,7 +22,7 @@ void *disk_addr(u_int blockno) {
 // Overview:
 //  Check if this virtual address is mapped to a block. (check PTE_V bit)
 int va_is_mapped(void *va) {
-	return (vpd[PDX(va)] & PTE_V) && (vpt[VPN(va)] & (PTE_V | PTE_SWAP));
+	return (vpd[PDX(va)] & PTE_V) && (vpt[VPN(va)] & PTE_V);
 }
 
 // Overview:

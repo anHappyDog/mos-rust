@@ -1,4 +1,4 @@
-use super::page::{PAGE_SHIFT, PAGE_SIZE};
+use super::{page::PAGE_SHIFT, KSEG0};
 use core::{
     ops::{Add, BitOr, Rem, Sub},
     ptr,
@@ -11,6 +11,12 @@ pub struct VirtAddr {
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct PhysAddr {
     pub raw: usize,
+}
+
+impl From<VirtAddr> for *mut u8 {
+    fn from(va: VirtAddr) -> Self {
+        va.raw as *mut u8
+    }
 }
 
 impl From<VirtAddr> for PhysAddr {
@@ -89,7 +95,19 @@ impl VirtAddr {
     pub const fn new(raw: usize) -> Self {
         VirtAddr { raw }
     }
-
+    
+    #[inline(always)]
+    pub fn align_up(&self, l: usize) -> Self {
+        Self {
+            raw: (self.raw + l - 1) & !(l - 1),
+        }
+    }
+    #[inline(always)]
+    pub fn align_down(&self, l: usize) -> Self {
+        Self {
+            raw: self.raw & !(l - 1),
+        }
+    }
     #[inline(always)]
     pub const fn zero() -> Self {
         VirtAddr { raw: 0 }
@@ -102,7 +120,7 @@ impl VirtAddr {
     #[inline(always)]
     pub fn write<T>(&self, src: T) {
         unsafe {
-            ptr::write(self.raw as *mut T, src);
+            ptr::write_unaligned(self.raw as *mut T, src);
         }
     }
     #[inline(always)]
@@ -113,7 +131,7 @@ impl VirtAddr {
     }
     #[inline(always)]
     pub fn read<T>(&self) -> T {
-        unsafe { ptr::read(self.raw as *const T) }
+        unsafe { ptr::read_unaligned(self.raw as *const T) }
     }
     #[inline(always)]
     pub fn read_volatile<T>(&self) -> T {
@@ -121,26 +139,32 @@ impl VirtAddr {
     }
 }
 
-
 impl From<*mut u8> for PhysAddr {
     fn from(raw: *mut u8) -> Self {
         PhysAddr::new(raw as usize)
     }
-
 }
 
-impl Into<*mut u8> for PhysAddr {
-    fn into(self) -> *mut u8 {
-        self.raw as *mut u8
+impl From<PhysAddr> for *mut u8 {
+    fn from(pa: PhysAddr) -> Self {
+        pa.raw as *mut u8
     }
-
 }
 
 impl PhysAddr {
     pub const fn new(raw: usize) -> Self {
         PhysAddr { raw }
     }
-
+    pub fn align_up(&self, l: usize) -> Self {
+        Self {
+            raw: (self.raw + l - 1) & !(l - 1),
+        }
+    }
+    pub fn align_down(&self, l: usize) -> Self {
+        Self {
+            raw: self.raw & !(l - 1),
+        }
+    }
     pub fn get_ppn(&self) -> usize {
         self.raw >> PAGE_SHIFT
     }
@@ -158,7 +182,7 @@ impl PhysAddr {
     }
     #[inline(always)]
     pub fn read<T>(&self) -> T {
-        unsafe { ptr::read(self.raw as *const T) }
+        unsafe { ptr::read_unaligned(self.raw as *const T) }
     }
     #[inline(always)]
     pub fn read_volatile<T>(&self) -> T {
@@ -188,4 +212,12 @@ impl From<PhysAddr> for usize {
     fn from(pa: PhysAddr) -> Self {
         pa.raw
     }
+}
+
+pub fn kva_to_pa(va: VirtAddr) -> PhysAddr {
+    PhysAddr::new(va.raw - KSEG0.raw)
+}
+
+pub fn pa_to_kva(pa: PhysAddr) -> VirtAddr {
+    VirtAddr::new(pa.raw + KSEG0.raw)
 }

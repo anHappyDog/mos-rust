@@ -17,15 +17,18 @@ mod proc;
 mod trap;
 mod util;
 use crate::trap::___avoid_fk_compiler_optimization;
-use core::arch;
+use core::{arch, cell::RefCell};
 use proc::sched;
 
 elf::DEFINE_ELF_BYTES!(USER_ICODE, "../target/user/bin/icode");
 elf::DEFINE_ELF_BYTES!(FS_SERV, "../target/user/bin/fs");
 elf::DEFINE_ELF_BYTES!(TEST1, "../target/user/bin/test1");
 elf::DEFINE_ELF_BYTES!(TEST2, "../target/user/bin/test2");
+elf::DEFINE_ELF_BYTES!(TEST3, "../target/user/bin/test3");
 elf::DEFINE_ELF_BYTES!(FKTEST, "../target/user/bin/fktest");
 
+use alloc::rc::Rc;
+use crate::util::ListNode;
 #[no_mangle]
 #[link_section = ".text.boot"]
 extern "C" fn _init(mem_sz: usize) -> ! {
@@ -41,6 +44,8 @@ extern "C" fn _init(mem_sz: usize) -> ! {
     proc::env_create(TEST1);
     println!("creating test2");
     proc::env_create(TEST2);
+    // println!("creating test3");
+    // proc::env_create(TEST3);
     // println!("creating fktest");
     // proc::env_create(FKTEST);
 

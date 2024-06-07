@@ -3,22 +3,26 @@ use crate::{
         addr::VirtAddr,
         page::page_alloc,
         pgtable::{Permssion, PgtableEntry},
-        KSEG0, UENVS, UPAGES, USTACKTOP, UTEMP, UVPT, UXSTACKTOP,
+        KSEG0, UENVS, UPAGES, USTACKTOP, UTEMP, UTOP, UVPT, UXSTACKTOP,
     },
     println,
     proc::{Env, CUR_ENV, ENV_LIST},
     trap::trapframe,
 };
-use core::mem::size_of;
+use core::{mem::size_of, ptr};
 use mips32::{cp0, Reg};
 
+use super::trapframe::Trapframe;
+
 pub(super) fn do_tlb_mod(trapframe: &mut trapframe::Trapframe) {
+    println!("fj tlb mod\n");
     let tmp_tf = VirtAddr::from(trapframe as *const trapframe::Trapframe as usize)
         .read::<trapframe::Trapframe>();
     if trapframe.regs[29] < USTACKTOP.raw || trapframe.regs[29] >= UXSTACKTOP.raw {
         trapframe.regs[29] = UXSTACKTOP.raw;
     }
     trapframe.regs[29] -= size_of::<trapframe::Trapframe>();
+
     VirtAddr::from(trapframe.regs[29]).write(tmp_tf);
     let curenv = {
         match CUR_ENV.lock().as_mut() {
@@ -30,7 +34,6 @@ pub(super) fn do_tlb_mod(trapframe: &mut trapframe::Trapframe) {
         panic!("TLB Mod but no user handler registered.");
     }
     trapframe.regs[4] = trapframe.regs[29];
-    trapframe.regs[29] -= size_of::<usize>();
     trapframe.epc = curenv.env_user_tlb_mod_entry;
 }
 
@@ -46,9 +49,9 @@ fn passive_alloc(env: &mut Env, va: VirtAddr) -> Result<(), &'static str> {
     if va < UTEMP {
         return Err("passive_alloc: va < UTEMP");
     }
-    if va >= USTACKTOP && va < UXSTACKTOP {
-        return Err("passive_alloc: va >= USTACKTOP && va < UXSTACKTOP");
-    }
+    // if va >= USTACKTOP && va < UXSTACKTOP {
+    //     return Err("passive_alloc: va >= USTACKTOP && va < UXSTACKTOP");
+    // }
     if va >= UENVS && va < UPAGES {
         return Err("passive_alloc: va >= UENVS && va < UPAGES");
     }
@@ -59,8 +62,16 @@ fn passive_alloc(env: &mut Env, va: VirtAddr) -> Result<(), &'static str> {
         return Err("passive_alloc: va >= KSEG0");
     }
     let (_, page_pa) = page_alloc().ok_or("No more pages")?;
+    let mut perm = Permssion::empty();
+    if va < UTOP {
+        perm = Permssion::PTE_D;
+    }
+    println!(
+        "passive_alloc: va = {:x}, page_pa = {:x}\n",
+        va.raw, page_pa.raw
+    );
     env.env_pgdir
-        .map_va_to_pa(va, page_pa, 1, &Permssion::PTE_D, false)
+        .map_va_to_pa(va, page_pa, env.env_asid, 1, &perm, true)
 }
 
 // #[inline(always)]

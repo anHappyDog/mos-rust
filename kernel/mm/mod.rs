@@ -2,8 +2,6 @@ pub mod addr;
 pub mod page;
 pub mod pgtable;
 
-use core::ops::Add;
-
 use addr::VirtAddr;
 use alloc_macro::define_simple_allocator;
 
@@ -21,9 +19,10 @@ pub const KSEG0: VirtAddr = VirtAddr::new(0x80000000);
 pub const KSEG1: VirtAddr = VirtAddr::new(0xa0000000);
 #[allow(unused)]
 pub const KSEG2: VirtAddr = VirtAddr::new(0xc0000000);
-
+#[allow(unused)]
 pub const PTMAP: usize = 4096;
 pub const PDMAP: usize = 4 * 1024 * 1024;
+#[allow(unused)]
 pub const NASID: usize = 256;
 
 // KSTACKTOP
@@ -33,7 +32,9 @@ pub const UENVS: VirtAddr = VirtAddr::new(0x7f400000);
 pub const UTOP: VirtAddr = UENVS;
 pub const UXSTACKTOP: VirtAddr = UTOP;
 pub const USTACKTOP: VirtAddr = VirtAddr::new(0x7f3fd000);
+#[allow(unused)]
 pub const UTEXT: VirtAddr = VirtAddr::new(PDMAP);
+#[allow(unused)]
 pub const UCOW: VirtAddr = VirtAddr::new(0x3fe000);
 pub const UTEMP: VirtAddr = VirtAddr::new(0x3fd000);
 
