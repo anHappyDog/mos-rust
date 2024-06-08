@@ -1,4 +1,4 @@
-use core::{fmt::{Debug, Display}, ptr};
+use core::{fmt::Display, ptr};
 
 #[repr(C)]
 #[derive(Clone, Copy)]

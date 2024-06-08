@@ -1,13 +1,16 @@
 use super::{page::PAGE_SHIFT, KSEG0};
 use core::{
+    mem::align_of,
     ops::{Add, BitOr, Rem, Sub},
     ptr,
 };
+#[repr(C)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct VirtAddr {
     pub raw: usize,
 }
 
+#[repr(C)]
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct PhysAddr {
     pub raw: usize,
@@ -95,7 +98,7 @@ impl VirtAddr {
     pub const fn new(raw: usize) -> Self {
         VirtAddr { raw }
     }
-    
+
     #[inline(always)]
     pub fn align_up(&self, l: usize) -> Self {
         Self {
@@ -120,7 +123,8 @@ impl VirtAddr {
     #[inline(always)]
     pub fn write<T>(&self, src: T) {
         unsafe {
-            ptr::write_unaligned(self.raw as *mut T, src);
+            assert!(self.raw % align_of::<T>() == 0);
+            ptr::write(self.raw as *mut T, src);
         }
     }
     #[inline(always)]
@@ -131,7 +135,8 @@ impl VirtAddr {
     }
     #[inline(always)]
     pub fn read<T>(&self) -> T {
-        unsafe { ptr::read_unaligned(self.raw as *const T) }
+        assert!(self.raw % align_of::<T>() == 0);
+        unsafe { ptr::read(self.raw as *const T) }
     }
     #[inline(always)]
     pub fn read_volatile<T>(&self) -> T {
@@ -155,6 +160,9 @@ impl PhysAddr {
     pub const fn new(raw: usize) -> Self {
         PhysAddr { raw }
     }
+    pub const fn zero() -> Self {
+        PhysAddr { raw: 0 }
+    }
     pub fn align_up(&self, l: usize) -> Self {
         Self {
             raw: (self.raw + l - 1) & !(l - 1),
@@ -171,21 +179,29 @@ impl PhysAddr {
     #[inline(always)]
     pub fn write<T>(&self, src: *const T, len: usize) {
         unsafe {
-            ptr::copy_nonoverlapping(src as *const u8, self.raw as *mut u8, len);
+            assert!(self.raw % align_of::<T>() == 0 && self.raw % core::mem::size_of::<T>() == 0);
+            ptr::copy(src, self.raw as *mut T, len);
         }
     }
     #[inline(always)]
     pub fn write_volatile<T>(&self, src: T) {
         unsafe {
+            assert!(self.raw % align_of::<T>() == 0 && self.raw % core::mem::size_of::<T>() == 0);
             ptr::write_volatile(self.raw as *mut T, src);
         }
     }
     #[inline(always)]
     pub fn read<T>(&self) -> T {
-        unsafe { ptr::read_unaligned(self.raw as *const T) }
+        assert!(
+            self.raw % core::mem::align_of::<T>() == 0 && self.raw % core::mem::size_of::<T>() == 0
+        );
+        unsafe { ptr::read(self.raw as *const T) }
     }
     #[inline(always)]
     pub fn read_volatile<T>(&self) -> T {
+        assert!(
+            self.raw % core::mem::align_of::<T>() == 0 && self.raw % core::mem::size_of::<T>() == 0
+        );
         unsafe { ptr::read_volatile(self.raw as *const T) }
     }
 }

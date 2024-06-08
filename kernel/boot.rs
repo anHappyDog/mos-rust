@@ -17,37 +17,28 @@ mod proc;
 mod trap;
 mod util;
 use crate::trap::___avoid_fk_compiler_optimization;
-use core::{arch, cell::RefCell};
+use core::arch;
 use proc::sched;
 
-elf::DEFINE_ELF_BYTES!(USER_ICODE, "../target/user/bin/icode");
-elf::DEFINE_ELF_BYTES!(FS_SERV, "../target/user/bin/fs");
-elf::DEFINE_ELF_BYTES!(TEST1, "../target/user/bin/test1");
-elf::DEFINE_ELF_BYTES!(TEST2, "../target/user/bin/test2");
-elf::DEFINE_ELF_BYTES!(TEST3, "../target/user/bin/test3");
-elf::DEFINE_ELF_BYTES!(FKTEST, "../target/user/bin/fktest");
+elf::DEFINE_ELF_BYTES!(USER_ICODE, "../target/user/bin/icode.b");
+elf::DEFINE_ELF_BYTES!(FS_SERV, "../target/user/bin/fs.b");
+elf::DEFINE_ELF_BYTES!(TEST1, "../target/user/bin/test1.b");
+elf::DEFINE_ELF_BYTES!(TEST2, "../target/user/bin/test2.b");
+elf::DEFINE_ELF_BYTES!(TEST3, "../target/user/bin/test3.b");
+elf::DEFINE_ELF_BYTES!(FKTEST, "../target/user/bin/fktest.b");
+elf::DEFINE_ELF_BYTES!(TEST4, "../target/user/bin/test4.b");
 
-use alloc::rc::Rc;
-use crate::util::ListNode;
 #[no_mangle]
 #[link_section = ".text.boot"]
 extern "C" fn _init(mem_sz: usize) -> ! {
     logo();
     mm::mem_init(mem_sz);
     proc::env_init();
-    trap::trap_init();
     // println!("creating user_icode");
-    // proc::env_create(USER_ICODE);
+    proc::env_create(USER_ICODE, 1);
     // println!("creating fs_serv");
-    // proc::env_create(FS_SERV);
-    println!("creating test1");
-    proc::env_create(TEST1);
-    println!("creating test2");
-    proc::env_create(TEST2);
-    // println!("creating test3");
-    // proc::env_create(TEST3);
-    // println!("creating fktest");
-    // proc::env_create(FKTEST);
+    // proc::env_create(TEST4, 1);
+    proc::env_create(FS_SERV, 1);
 
     sched::schedule(true);
     // never reach here,to let cheat the compiler

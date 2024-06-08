@@ -133,3 +133,21 @@ ret_from_exception:
 	RESTORE_ALL
 	eret
 
+.macro RESET_KCLOCK
+	li 	$t0, 2000000
+	mtc0	$zero, $9
+	mtc0 	$t0, $11
+.endm
+
+.section .text,"ax",%progbits
+.globl env_pop_tf;
+.type env_pop_tf,@function;
+.ent env_pop_tf;
+env_pop_tf:
+.set reorder
+.set at
+	mtc0    $a1, $10
+	move    $sp, $a0
+	RESET_KCLOCK
+	j       ret_from_exception
+.end env_pop_tf;

@@ -11,12 +11,12 @@ static int file_stat(struct Fd *fd, struct Stat *stat);
 // Dot represents choosing the member within the struct declaration
 // to initialize, with no need to consider the order of members.
 struct Dev devfile = {
-    .dev_id = 'f',
-    .dev_name = "file",
-    .dev_read = file_read,
-    .dev_write = file_write,
-    .dev_close = file_close,
-    .dev_stat = file_stat,
+	.dev_id = 'f',
+	.dev_name = "file",
+	.dev_read = file_read,
+	.dev_write = file_write,
+	.dev_close = file_close,
+	.dev_stat = file_stat,
 };
 
 // Overview:
@@ -26,7 +26,8 @@ struct Dev devfile = {
 //  the file descriptor on success,
 //  the underlying error on failure.
 /* ----- MOS EXERCISE 5 open AFTER dir-lookup BEGIN ----- */
-int open(const char *path, int mode) {
+int open(const char *path, int mode)
+{
 	int r;
 
 	// Step 1: Alloc a new 'Fd' using 'fd_alloc' in fd.c.
@@ -34,7 +35,8 @@ int open(const char *path, int mode) {
 	struct Fd *fd;
 	// ----- MOS BLANK BEGIN -----
 	r = fd_alloc(&fd);
-	if (r) {
+	if (r)
+	{
 		return r;
 	}
 	// ----- MOS BLANK END -----
@@ -42,7 +44,8 @@ int open(const char *path, int mode) {
 	// Step 2: Prepare the 'fd' using 'fsipc_open' in fsipc.c.
 	// ----- MOS BLANK BEGIN -----
 	r = fsipc_open(path, mode, fd);
-	if (r) {
+	if (r)
+	{
 		return r;
 	}
 	// ----- MOS BLANK END -----
@@ -60,15 +63,17 @@ int open(const char *path, int mode) {
 	// ----- MOS BLANK END -----
 
 	// Step 4: Map the file content using 'fsipc_map'.
-	for (int i = 0; i < size; i += PTMAP) {
+	for (int i = 0; i < size; i += PTMAP)
+	{
 		// ----- MOS BLANK BEGIN -----
 		r = fsipc_map(fileid, i, va + i);
-		if (r) {
+		if (r)
+		{
+			debugf("fsipc_map failed: i : %d,va + i is %08x\n", i, va + i);
 			return r;
 		}
 		// ----- MOS BLANK END -----
 	}
-
 	// Step 5: Return the number of file descriptor using 'fd2num'.
 	// ----- MOS BLANK BEGIN -----
 	// if (mode & O_APPND)
@@ -80,7 +85,8 @@ int open(const char *path, int mode) {
 
 // Overview:
 //  Close a file descriptor
-int file_close(struct Fd *fd) {
+int file_close(struct Fd *fd)
+{
 	int r;
 	struct Filefd *ffd;
 	void *va;
@@ -95,25 +101,31 @@ int file_close(struct Fd *fd) {
 	va = fd2data(fd);
 
 	// Tell the file server the dirty page.
-	for (i = 0; i < size; i += PTMAP) {
-		if ((r = fsipc_dirty(fileid, i)) < 0) {
+	for (i = 0; i < size; i += PTMAP)
+	{
+		if ((r = fsipc_dirty(fileid, i)) < 0)
+		{
 			debugf("cannot mark pages as dirty\n");
 			return r;
 		}
 	}
 
 	// Request the file server to close the file with fsipc.
-	if ((r = fsipc_close(fileid)) < 0) {
+	if ((r = fsipc_close(fileid)) < 0)
+	{
 		debugf("cannot close the file\n");
 		return r;
 	}
 
 	// Unmap the content of file, release memory.
-	if (size == 0) {
+	if (size == 0)
+	{
 		return 0;
 	}
-	for (i = 0; i < size; i += PTMAP) {
-		if ((r = syscall_mem_unmap(0, (void *)(va + i))) < 0) {
+	for (i = 0; i < size; i += PTMAP)
+	{
+		if ((r = syscall_mem_unmap(0, (void *)(va + i))) < 0)
+		{
 			debugf("cannont unmap the file\n");
 			return r;
 		}
@@ -125,7 +137,8 @@ int file_close(struct Fd *fd) {
 //  Read 'n' bytes from 'fd' at the current seek position into 'buf'. Since files
 //  are memory-mapped, this amounts to a memcpy() surrounded by a little red
 //  tape to handle the file size and seek pointer.
-static int file_read(struct Fd *fd, void *buf, u_int n, u_int offset) {
+static int file_read(struct Fd *fd, void *buf, u_int n, u_int offset)
+{
 	u_int size;
 	struct Filefd *f;
 	f = (struct Filefd *)fd;
@@ -133,11 +146,13 @@ static int file_read(struct Fd *fd, void *buf, u_int n, u_int offset) {
 	// Avoid reading past the end of file.
 	size = f->f_file.f_size;
 
-	if (offset > size) {
+	if (offset > size)
+	{
 		return 0;
 	}
 
-	if (offset + n > size) {
+	if (offset + n > size)
+	{
 		n = size - offset;
 	}
 
@@ -148,26 +163,31 @@ static int file_read(struct Fd *fd, void *buf, u_int n, u_int offset) {
 // Overview:
 //  Find the virtual address of the page that maps the file block
 //  starting at 'offset'.
-int read_map(int fdnum, u_int offset, void **blk) {
+int read_map(int fdnum, u_int offset, void **blk)
+{
 	int r;
 	void *va;
 	struct Fd *fd;
 
-	if ((r = fd_lookup(fdnum, &fd)) < 0) {
+	if ((r = fd_lookup(fdnum, &fd)) < 0)
+	{
 		return r;
 	}
 
-	if (fd->fd_dev_id != devfile.dev_id) {
+	if (fd->fd_dev_id != devfile.dev_id)
+	{
 		return -E_INVAL;
 	}
 
 	va = fd2data(fd) + offset;
 
-	if (offset >= MAXFILESIZE) {
+	if (offset >= MAXFILESIZE)
+	{
 		return -E_NO_DISK;
 	}
 
-	if (!(vpd[PDX(va)] & PTE_V) || !(vpt[VPN(va)] & PTE_V)) {
+	if (!(vpd[PDX(va)] & PTE_V) || !(vpt[VPN(va)] & PTE_V))
+	{
 		return -E_NO_DISK;
 	}
 
@@ -177,7 +197,8 @@ int read_map(int fdnum, u_int offset, void **blk) {
 
 // Overview:
 //  Write 'n' bytes from 'buf' to 'fd' at the current seek position.
-static int file_write(struct Fd *fd, const void *buf, u_int n, u_int offset) {
+static int file_write(struct Fd *fd, const void *buf, u_int n, u_int offset)
+{
 	int r;
 	u_int tot;
 	struct Filefd *f;
@@ -187,12 +208,15 @@ static int file_write(struct Fd *fd, const void *buf, u_int n, u_int offset) {
 	// Don't write more than the maximum file size.
 	tot = offset + n;
 
-	if (tot > MAXFILESIZE) {
+	if (tot > MAXFILESIZE)
+	{
 		return -E_NO_DISK;
 	}
 	// Increase the file's size if necessary
-	if (tot > f->f_file.f_size) {
-		if ((r = ftruncate(fd2num(fd), tot)) < 0) {
+	if (tot > f->f_file.f_size)
+	{
+		if ((r = ftruncate(fd2num(fd), tot)) < 0)
+		{
 			return r;
 		}
 	}
@@ -202,7 +226,8 @@ static int file_write(struct Fd *fd, const void *buf, u_int n, u_int offset) {
 	return n;
 }
 
-static int file_stat(struct Fd *fd, struct Stat *st) {
+static int file_stat(struct Fd *fd, struct Stat *st)
+{
 	struct Filefd *f;
 
 	f = (struct Filefd *)fd;
@@ -215,21 +240,25 @@ static int file_stat(struct Fd *fd, struct Stat *st) {
 
 // Overview:
 //  Truncate or extend an open file to 'size' bytes
-int ftruncate(int fdnum, u_int size) {
+int ftruncate(int fdnum, u_int size)
+{
 	int i, r;
 	struct Fd *fd;
 	struct Filefd *f;
 	u_int oldsize, fileid;
 
-	if (size > MAXFILESIZE) {
+	if (size > MAXFILESIZE)
+	{
 		return -E_NO_DISK;
 	}
 
-	if ((r = fd_lookup(fdnum, &fd)) < 0) {
+	if ((r = fd_lookup(fdnum, &fd)) < 0)
+	{
 		return r;
 	}
 
-	if (fd->fd_dev_id != devfile.dev_id) {
+	if (fd->fd_dev_id != devfile.dev_id)
+	{
 		return -E_INVAL;
 	}
 
@@ -238,17 +267,21 @@ int ftruncate(int fdnum, u_int size) {
 	oldsize = f->f_file.f_size;
 	f->f_file.f_size = size;
 
-	if ((r = fsipc_set_size(fileid, size)) < 0) {
+	if ((r = fsipc_set_size(fileid, size)) < 0)
+	{
 		return r;
 	}
 
 	void *va = fd2data(fd);
 
 	// Map any new pages needed if extending the file
-	for (i = ROUND(oldsize, PTMAP); i < ROUND(size, PTMAP); i += PTMAP) {
-		if ((r = fsipc_map(fileid, i, va + i)) < 0) {
+	for (i = ROUND(oldsize, PTMAP); i < ROUND(size, PTMAP); i += PTMAP)
+	{
+		if ((r = fsipc_map(fileid, i, va + i)) < 0)
+		{
 			int _r = fsipc_set_size(fileid, oldsize);
-			if (_r < 0) {
+			if (_r < 0)
+			{
 				return _r;
 			}
 			return r;
@@ -256,8 +289,10 @@ int ftruncate(int fdnum, u_int size) {
 	}
 
 	// Unmap pages if truncating the file
-	for (i = ROUND(size, PTMAP); i < ROUND(oldsize, PTMAP); i += PTMAP) {
-		if ((r = syscall_mem_unmap(0, (void *)(va + i))) < 0) {
+	for (i = ROUND(size, PTMAP); i < ROUND(oldsize, PTMAP); i += PTMAP)
+	{
+		if ((r = syscall_mem_unmap(0, (void *)(va + i))) < 0)
+		{
 			user_panic("ftruncate: syscall_mem_unmap %08x: %d\n", va + i, r);
 		}
 	}
@@ -268,7 +303,8 @@ int ftruncate(int fdnum, u_int size) {
 // Overview:
 //  Delete a file or directory.
 /* ----- MOS EXERCISE 5 remove AFTER fsipc-remove BEGIN ----- */
-int remove(const char *path) {
+int remove(const char *path)
+{
 	// Call fsipc_remove.
 
 	// ----- MOS BLANK BEGIN -----
@@ -279,6 +315,7 @@ int remove(const char *path) {
 
 // Overview:
 //  Synchronize disk with buffer cache
-int sync(void) {
+int sync(void)
+{
 	return fsipc_sync();
 }

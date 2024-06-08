@@ -18,7 +18,6 @@ static void __attribute__((noreturn)) cow_entry(struct Trapframe *tf)
 {
 	u_int va = tf->cp0_badvaddr;
 	u_int perm;
-	debugf("in the cow_entry,va=%08x,curent is %08x\n", va, env->env_id);
 	/* Step 1: Find the 'perm' in which the faulting address 'va' is mapped. */
 	/* Hint: Use 'vpt' and 'VPN' to find the page table entry. If the 'perm' doesn't have
 	 * 'PTE_COW', launch a 'user_panic'. */
@@ -55,7 +54,6 @@ static void __attribute__((noreturn)) cow_entry(struct Trapframe *tf)
 	// ----- MOS BLANK BEGIN -----
 	syscall_mem_unmap(0, (void *)UCOW);
 	// ----- MOS BLANK END -----
-	debugf("--- ucow unmapped!!!,va=%08x,curent is %08x\n", va, env->env_id);
 	// Step 7: Return to the faulting routine.
 	int r = syscall_set_trapframe(0, tf);
 	user_panic("syscall_set_trapframe returned %d", r);

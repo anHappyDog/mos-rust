@@ -1,5 +1,6 @@
-use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use alloc::{rc::Rc, vec::Vec};
 use core::{
+    arch,
     cell::RefCell,
     ops::{Add, Sub},
     ptr,
@@ -7,7 +8,10 @@ use core::{
 use lazy_static::lazy_static;
 use sync::spin::Spinlock;
 
-use crate::util::{DoubleLinkedList, IndexStack, ListNode};
+use crate::{
+    println,
+    util::{DoubleLinkedList, ListNode},
+};
 
 use super::{
     addr::{pa_to_kva, PhysAddr, VirtAddr},
@@ -30,22 +34,14 @@ impl Page {
     pub fn new(idx: usize) -> Self {
         Self {
             p_link: Rc::new(RefCell::new(ListNode::new(idx))),
-            p_pa: PhysAddr::new(0),
+            p_pa: PhysAddr::new(idx * PAGE_SIZE),
             p_ref: 0,
         }
-    }
-    #[allow(unused)]
-    pub fn get_pa(&self) -> PhysAddr {
-        self.p_pa
-    }
-
-    #[allow(unused)]
-    pub fn get_no(&self) -> u32 {
-        self.p_link.borrow().idx as u32
     }
 }
 
 lazy_static! {
+    #[repr(C,align(4096))]
     pub static ref PAGES: Spinlock<Vec<Page>> = Spinlock::new(Vec::new());
     static ref PAGE_LIST: Spinlock<DoubleLinkedList> = Spinlock::new(DoubleLinkedList::new());
 }
@@ -61,7 +57,6 @@ pub(super) fn page_init(mem_sz: usize) {
     let kernel_end = unsafe { VirtAddr::new(&stack_end as *const usize as usize) };
     for i in 0..count {
         let mut page = Page::new(i);
-        page.p_pa = PhysAddr::new(i * PAGE_SIZE);
         if KSEG0.add(i * PAGE_SIZE) >= kernel_end {
             page_list.push(page.p_link.clone());
         } else {
@@ -82,23 +77,30 @@ pub fn page_alloc() -> Option<(PageIndex, PhysAddr)> {
     let node = page_list.pop()?;
     let idx = node.borrow().idx;
     let page = &mut pages[idx];
-
     unsafe {
-        ptr::write_bytes(pa_to_kva(page.p_pa).into(), 0, PAGE_SIZE);
+        ptr::write_bytes::<u8>(pa_to_kva(page.p_pa).into(), 0, PAGE_SIZE);
     }
     page.p_ref = 1;
     Some((idx, page.p_pa))
 }
 
-#[allow(dead_code)]
-pub fn page_incref(p: PageIndex) {
-    let mut pages = PAGES.lock();
-    pages[p].p_ref += 1;
+pub fn page_incref(pno: PageIndex) {
+    let mut locked_pages = PAGES.lock();
+    let page = &mut locked_pages[pno];
+    page.p_ref += 1;
+
+    unsafe {
+        arch::asm!("sync");
+    }
 }
 
 pub fn page_decref(p: PageIndex) {
     let mut pages = PAGES.lock();
+
     pages[p].p_ref -= 1;
+    unsafe {
+        arch::asm!("sync");
+    }
     if pages[p].p_ref == 0 {
         let mut page_list = PAGE_LIST.lock();
         page_list.push(pages[p].p_link.clone());

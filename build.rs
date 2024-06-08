@@ -54,9 +54,6 @@ fn build_img() {
         .filter_map(|entry| entry.ok().map(|e| e.path()))
         .collect::<Vec<_>>();
 
-    // 打印文件路径，调试用
-    println!("{:?}", bin_files);
-
     let mut args = bin_files
         .iter()
         .map(|p| p.as_os_str())
@@ -107,13 +104,14 @@ fn compile_cfiles_for_mips32() {
     std::fs::create_dir_all(mos_bin_out_dir).unwrap();
 
     for cfile in mos_c_proc_file {
-        println!("{:?}", cfile);
         let output_path = PathBuf::from(mos_bin_out_dir).join(
             PathBuf::from(cfile.clone())
                 .file_stem()
                 .unwrap()
                 .to_str()
-                .unwrap(),
+                .unwrap()
+                .to_owned()
+                + ".b",
         );
 
         let status = Command::new("mipsel-linux-gnu-gcc")
@@ -133,7 +131,7 @@ fn compile_cfiles_for_mips32() {
         }
     }
     // build the fs proc
-    let fs_output_path = PathBuf::from(mos_bin_out_dir).join(std::path::Path::new("fs"));
+    let fs_output_path = PathBuf::from(mos_bin_out_dir).join(std::path::Path::new("fs.b"));
     let status = Command::new("mipsel-linux-gnu-gcc")
         .arg("-o")
         .arg(fs_output_path)
@@ -153,6 +151,7 @@ fn compile_cfiles_for_mips32() {
     }
     build_img();
     println!("cargo:rustc-link-search=native=./target/kernel/lib");
+    println!("cargo:rerun-if-changed=user");
     println!("cargo:rustc-link-lib=static=mos_exc_entry");
 }
 

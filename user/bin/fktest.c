@@ -16,13 +16,13 @@ int main()
 		// }
 
 		a += 2;
-		// for (;;)
+		for (;;)
 			debugf("\tthis is child :a:%d\n", a);
 		return 0;
 	}
 
 	a++;
-	// for (;;)
+	for (;;)
 		debugf("\t\tthis is father: a:%d\n", a);
 
 	return 0;

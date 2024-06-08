@@ -1,33 +1,15 @@
 use core::cell::RefCell;
 
 use alloc::rc::Rc;
-use alloc::vec::Vec;
 
-use crate::println;
-pub struct IndexStack {
-    stack: Vec<usize>,
-}
-
-impl IndexStack {
-    pub fn new() -> Self {
-        IndexStack { stack: Vec::new() }
-    }
-
-    pub fn push(&mut self, index: usize) {
-        self.stack.push(index);
-    }
-
-    pub fn pop(&mut self) -> Option<usize> {
-        self.stack.pop()
-    }
-}
-
+#[repr(C)]
 pub struct ListNode {
     pub next: Option<Rc<RefCell<ListNode>>>,
     pub prev: Option<Rc<RefCell<ListNode>>>,
     pub idx: usize,
 }
 
+#[repr(C)]
 pub struct DoubleLinkedList {
     pub head: Option<Rc<RefCell<ListNode>>>,
     pub tail: Option<Rc<RefCell<ListNode>>>,
@@ -50,6 +32,28 @@ impl DoubleLinkedList {
             tail: None,
         }
     }
+    pub fn insert_to_tail(&mut self, node: Rc<RefCell<ListNode>>) {
+        if self.head.is_none() {
+            self.head = Some(node.clone());
+            self.tail = Some(node);
+        } else {
+            let tail = self.tail.take().unwrap();
+            tail.borrow_mut().next = Some(node.clone());
+            node.borrow_mut().prev = Some(tail.clone());
+            self.tail = Some(node);
+        }
+    }
+    pub fn insert_to_head(&mut self, node: Rc<RefCell<ListNode>>) {
+        if self.head.is_none() {
+            self.head = Some(node.clone());
+            self.tail = Some(node);
+        } else {
+            let head = self.head.take().unwrap();
+            head.borrow_mut().prev = Some(node.clone());
+            node.borrow_mut().next = Some(head.clone());
+            self.head = Some(node);
+        }
+    }
     pub fn push(&mut self, node: Rc<RefCell<ListNode>>) {
         if self.head.is_none() {
             self.head = Some(node.clone());
@@ -62,7 +66,6 @@ impl DoubleLinkedList {
         }
     }
     pub fn remove(&mut self, node: Rc<RefCell<ListNode>>) {
-        println!("remove node: {}", node.borrow().idx);
         let prev = node.borrow().prev.clone();
         let next = node.borrow().next.clone();
         if prev.clone().is_none() && next.clone().is_none() {
@@ -132,3 +135,4 @@ extern "C" fn memmove(dst: *mut u8, src: *const u8, n: usize) -> *mut u8 {
     }
     dst
 }
+

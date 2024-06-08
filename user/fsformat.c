@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 #define PAGE_SIZE 4096
-#include "../user/include/fs.h"
+#include "./include/fs.h"
 
 /* Static assert, for compile-time assertion checking */
 #define static_assert(c) (void)(char(*)[(c) ? 1 : -1])0

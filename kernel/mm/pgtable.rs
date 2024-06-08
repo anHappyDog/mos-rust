@@ -17,7 +17,7 @@ pub struct Pgtable {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct PgtableEntry {
-    raw_entry: usize,
+    pub raw_entry: usize,
 }
 
 impl BitAnd<Permssion> for PgtableEntry {
@@ -58,10 +58,11 @@ impl PgtableEntry {
         PgtableEntry { raw_entry: 0 }
     }
     pub fn kva(&self) -> VirtAddr {
-        VirtAddr::new(self.raw_entry & 0xfffff000 | KSEG0.raw)
+        VirtAddr::from((self.raw_entry & 0xfffff000) + KSEG0.raw)
     }
 
     pub fn set(&mut self, pa: PhysAddr, flags: &Permssion) {
+        assert!(pa % PAGE_SIZE == 0);
         self.raw_entry = pa | flags.bits();
     }
 
@@ -69,7 +70,6 @@ impl PgtableEntry {
         self.raw_entry
     }
 }
-
 
 impl Pgtable {
     pub const fn new() -> Self {
@@ -87,11 +87,11 @@ impl Pgtable {
         reset: bool,
     ) -> Result<(), &'static str> {
         for i in 0..count {
-            let vpn = va.add(i << 12).get_vpn();
+            let vpn = va.add(i << PAGE_SHIFT).get_vpn();
             if !(self.entries[vpn >> 10] & Permssion::PTE_V) {
-                let (_, pa) = page_alloc().ok_or("No more pages")?;
+                let (_, page_pa) = page_alloc().ok_or("No more pages")?;
                 self.entries[vpn >> 10].set(
-                    pa,
+                    page_pa,
                     &(*flags | Permssion::PTE_V | Permssion::PTE_C_CACHEABLE),
                 );
             }
@@ -109,14 +109,14 @@ impl Pgtable {
                 }
             }
             pgd.entries[vpn & 0x3ff].set(
-                pa.align_down(PAGE_SIZE),
+                pa.add(i << PAGE_SHIFT).align_down(PAGE_SIZE),
                 &(*flags | Permssion::PTE_V | Permssion::PTE_C_CACHEABLE),
             );
             tlb_invalidate(va.into(), asid);
         }
         Ok(())
     }
-    pub fn unmap_va(&mut self, va: VirtAddr) -> Result<(), &'static str> {
+    pub fn unmap_va(&mut self, va: VirtAddr, asid: usize) -> Result<(), &'static str> {
         let vpn = va.get_vpn();
         // self.entries[vpn].set(0, &Permssion::empty());
         if !(self.entries[vpn >> 10] & Permssion::PTE_V) {
@@ -130,6 +130,7 @@ impl Pgtable {
         let pg = pgd.entries[vpn & 0x3ff].kva();
         page_decref(get_page_index_by_kvaddr(pg).expect("The mapped memory should be a page."));
         pgd.entries[vpn & 0x3ff].set(PhysAddr::new(0), &Permssion::empty());
+        tlb_invalidate(va.into(), asid);
         Ok(())
     }
 
