@@ -106,7 +106,7 @@ int close(int fdnum) {
 
 void close_all(void) {
 	int i;
-
+	debugf("[%08x] close all file descriptors\n", env->env_id);
 	for (i = 0; i < MAXFD; i++) {
 		close(i);
 	}

@@ -178,15 +178,12 @@ fn sys_mem_unmap(envid: EnvIndex, va: VirtAddr) -> i32 {
     if is_illegal_va(va) {
         return -E_INVAL;
     }
-
+    // println!("sys_mem_unmap: va: {:#x}", va.raw);
     let idx = get_idx_by_envid(envid);
     let mut envs = ENV_LIST.lock();
     let env = &mut envs[idx];
-    if env.env_pgdir.unmap_va(va, env.env_asid).is_ok() {
-        0
-    } else {
-        -E_INVAL
-    }
+    let _ = env.env_pgdir.unmap_va(va, env.env_asid);
+    0
 }
 
 fn sys_exofork() -> i32 {
@@ -238,7 +235,7 @@ fn sys_set_env_status(envid: usize, status: EnvStatus) -> i32 {
 
 fn sys_set_trapframe(envid: usize, tf: *const Trapframe) -> i32 {
     if is_illegal_va_range((tf as usize).into(), size_of::<Trapframe>()) {
-        println!("sys_set_trapframe: invalid va: {:#x}", tf as usize );
+        // println!("sys_set_trapframe: invalid va: {:#x}", tf as usize );
         return -E_INVAL;
     }
     let idx = get_idx_by_envid(envid);
@@ -251,7 +248,7 @@ fn sys_set_trapframe(envid: usize, tf: *const Trapframe) -> i32 {
             } else {
                 VirtAddr::from(&stack_end as *const usize as usize - size_of::<Trapframe>())
                     .write::<Trapframe>(*tf);
-                println!("sys_set_trapframe: curenv: {:#x},tf is {:#x},returned {:#x}", curidx, tf as usize,(*tf).regs[2] as i32);
+                // println!("sys_set_trapframe: curenv: {:#x},tf is {:#x},returned {:#x}", curidx, tf as usize,(*tf).regs[2] as i32);
                 return (*tf).regs[2] as i32;
             }
         } else {
@@ -399,6 +396,7 @@ fn is_illegal_va_range(va: VirtAddr, len: usize) -> bool {
 }
 
 pub fn do_syscall(trapframe: &mut Trapframe) {
+    // println!("do_syscall: epc: {:#x},syscall number: {:#x}", trapframe.epc,trapframe.regs[4]);
     trapframe.epc += 4;
     let ret: i32 = match trapframe.regs[4] {
         SYS_CGETC => sys_cgetc(),

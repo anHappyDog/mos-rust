@@ -42,17 +42,17 @@ extern "C" fn _init(mem_sz: usize) -> ! {
     mm::mem_init(mem_sz);
     proc::env_init();
     // println!("creating user_icode");
-    // proc::env_create(USER_ICODE, 1);
+    proc::env_create(USER_ICODE, 1);
     // proc::env_create(FSTEST, 1);
     // println!("creating fs_serv");
     // proc::env_create(TEST4, 1);
     // proc::env_create(PINGPING, 1);
-    proc::env_create(TEST1, 1);
+    // proc::env_create(TEST2, 1);
     // proc::env_create(TESTARG, 1);
     // proc::env_create(DEVTST, 1);
     // proc::env_create(NUM, 1);
     // proc::env_create(TESTFDSHARING, 1);
-    // proc::env_create(FS_SERV, 1);
+    proc::env_create(FS_SERV, 1);
     // proc::env_create(TESTBSS, 1);
     sched::schedule(true);
     // never reach here,to let cheat the compiler

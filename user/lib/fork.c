@@ -56,7 +56,7 @@ static void __attribute__((noreturn)) cow_entry(struct Trapframe *tf)
 	// ----- MOS BLANK END -----
 	// Step 7: Return to the faulting routine.
 	int r = syscall_set_trapframe(0, tf);
-	user_panic("syscall_set_trapframe returned %d", r);
+	user_panic("syscall_set_trapframe returned %08x", r);
 }
 /* ----- MOS EXERCISE END ----- */
 

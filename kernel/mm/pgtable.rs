@@ -2,7 +2,7 @@ use core::ops::{Add, BitAnd};
 
 use mips32::tlb::tlb_invalidate;
 
-use crate::println;
+use crate::{println, proc::CUR_ENV};
 
 use super::{
     addr::{PhysAddr, VirtAddr},
@@ -117,7 +117,6 @@ impl Pgtable {
                 &(*flags | Permssion::PTE_V | Permssion::PTE_C_CACHEABLE),
             );
             tlb_invalidate(tva.into(), asid);
-            println!("mapped va {:#x} to pa {:#x}", tva.raw, tpa.raw);
         }
         Ok(())
     }
