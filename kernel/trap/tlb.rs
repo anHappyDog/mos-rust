@@ -48,7 +48,7 @@ fn passive_alloc(env: &mut Env, va: VirtAddr) -> Result<(), &'static str> {
     if va < UTEMP {
         return Err("passive_alloc: va < UTEMP");
     }
-    if va >= USTACKTOP && va < USTACKTOP.add(2 * PTMAP) {
+    if va >= USTACKTOP && va < USTACKTOP.add(PTMAP) {
         return Err("passive_alloc: va >= USTACKTOP && va < UXSTACKTOP");
     }
     if va >= UENVS && va < UPAGES {
@@ -62,7 +62,7 @@ fn passive_alloc(env: &mut Env, va: VirtAddr) -> Result<(), &'static str> {
     }
     let (_, page_pa) = page_alloc().ok_or("No more pages")?;
     let mut perm = Permssion::empty();
-    if va < UTOP {
+    if va < UVPT {
         perm = Permssion::PTE_D;
     }
     env.env_pgdir

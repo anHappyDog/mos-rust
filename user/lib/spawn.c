@@ -69,7 +69,6 @@ int init_stack(u_int child, char **argv, u_int *init_sp) {
 
 	// Set *init_sp to the initial stack pointer for the child
 	*init_sp = USTACKTOP - UTEMP - PAGE_SIZE + (u_int)pargv_ptr;
-
 	if ((r = syscall_mem_map(0, (void *)UTEMP, child, (void *)(USTACKTOP - PAGE_SIZE), PTE_D)) <
 	    0) {
 		goto error;

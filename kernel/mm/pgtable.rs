@@ -7,7 +7,7 @@ use crate::{println, proc::CUR_ENV};
 use super::{
     addr::{PhysAddr, VirtAddr},
     page::{get_page_index_by_kvaddr, page_alloc, page_decref, PAGE_SHIFT, PAGE_SIZE},
-    KSEG0,
+    KSEG0, USTACKTOP, UTOP,
 };
 #[repr(C)]
 #[derive(Clone, Copy)]

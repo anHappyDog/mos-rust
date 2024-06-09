@@ -147,8 +147,6 @@ impl Env {
             }
         });
         self.env_tf.set_epc(elf_header.get_entry());
-        self.env_tf.regs[29] = USTACKTOP.raw - size_of::<usize>() * 2;
-        self.env_tf.set_status(ST_IM7 | ST_IE | ST_EXL | ST_UM);
     }
     #[allow(dead_code)]
     pub fn destroy(&mut self) {}
@@ -261,6 +259,8 @@ pub fn env_alloc(
     env.env_runs = 0;
     env.env_pri = pri;
     env.env_cur_runs = pri as isize;
+    env.env_tf.regs[29] = USTACKTOP.raw - size_of::<usize>() * 2;
+    env.env_tf.set_status(ST_IM7 | ST_IE | ST_EXL | ST_UM);
     let pre_table = PRE_PGTABLE.lock();
     for i in (UTOP.get_vpn() >> 10)..(UVPT.get_vpn() >> 10) {
         env.env_pgdir.entries[i].raw_entry = pre_table.entries[i].raw_entry;

@@ -29,9 +29,9 @@ pub const NASID: usize = 256;
 pub const UVPT: VirtAddr = VirtAddr::new(0x7fc00000);
 pub const UPAGES: VirtAddr = VirtAddr::new(0x7f800000);
 pub const UENVS: VirtAddr = VirtAddr::new(0x7f400000);
-pub const UTOP: VirtAddr = UENVS;
-pub const UXSTACKTOP: VirtAddr = UTOP;
-pub const USTACKTOP: VirtAddr = VirtAddr::new(0x7f3fd000);
+pub const UTOP: VirtAddr = VirtAddr::new(0x7f400000);
+pub const UXSTACKTOP: VirtAddr = VirtAddr::new(0x7f400000);
+pub const USTACKTOP: VirtAddr = VirtAddr::new(0x7f3fe000);
 #[allow(unused)]
 pub const UTEXT: VirtAddr = VirtAddr::new(PDMAP);
 #[allow(unused)]

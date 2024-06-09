@@ -279,8 +279,9 @@ int main(int argc, char **argv) {
 		if (interactive) {
 			printf("\n$ ");
 		}
+		u_int sp = 0;
+		asm volatile("move %0, $sp" : "=r"(sp) : :);
 		readline(buf, sizeof buf);
-		debugf("read commandline finished\n");
 		if (buf[0] == '#') {
 			continue;
 		}

@@ -54,6 +54,7 @@ extern "C" fn _init(mem_sz: usize) -> ! {
     // proc::env_create(TESTFDSHARING, 1);
     proc::env_create(FS_SERV, 1);
     // proc::env_create(TESTBSS, 1);
+    // proc::env_create(FKTEST, 1);
     sched::schedule(true);
     // never reach here,to let cheat the compiler
     // this function "will definitely be called"
