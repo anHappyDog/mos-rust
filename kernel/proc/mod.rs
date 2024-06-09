@@ -256,7 +256,7 @@ pub fn env_alloc(
     let env = &mut env_list[idx];
     env.env_status = EnvStatus::Runnable;
     env.env_id = mkenvid(idx);
-    env.env_asid = asid_alloc().unwrap();
+    env.env_asid = asid_alloc().expect("No more free asid.");
     env.env_parent_id = parent_id.unwrap_or(0);
     env.env_runs = 0;
     env.env_pri = pri;

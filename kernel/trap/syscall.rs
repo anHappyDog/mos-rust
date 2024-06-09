@@ -2,7 +2,7 @@ use super::trapframe::Trapframe;
 use super::E_IPC_NOT_RECV;
 use crate::dev::uart::{Uart, NS16550A};
 use crate::mm::addr::{pa_to_kva, PhysAddr, VirtAddr};
-use crate::mm::page::{get_page_index_by_kvaddr, page_alloc, page_incref, stack_end};
+use crate::mm::page::{get_page_index_by_kvaddr, page_alloc, page_decref, page_incref, stack_end};
 use crate::mm::pgtable::Permssion;
 use crate::mm::UTOP;
 use crate::mm::{KSEG1, UTEMP};
@@ -42,7 +42,7 @@ fn sys_putchar(c: u32) -> i32 {
 
 fn sys_print_cons(s: VirtAddr, num: usize) -> i32 {
     for i in 0..num {
-        NS16550A.putchar(s.add(i).read::<u8>().into());
+        NS16550A.putchar(s.add(i).read::<u8>() as u32);
     }
     0
 }
@@ -127,13 +127,14 @@ fn sys_mem_alloc(envid: usize, va: VirtAddr, perm: Permssion) -> i32 {
     let idx = get_idx_by_envid(envid);
     let mut envs = ENV_LIST.lock();
     let env = &mut envs[idx];
-    let (idx, page_pa) = page_alloc().unwrap();
+    let (page_idx, page_pa) = page_alloc().expect("sys_mem_alloc: page_alloc failed");
     let result = env
         .env_pgdir
         .map_va_to_pa(va, page_pa, env.env_asid, 1, &perm, false);
     if result.is_ok() {
         0
     } else {
+        page_decref(page_idx);
         -E_INVAL
     }
 }
@@ -159,14 +160,16 @@ fn sys_mem_map(
         }
     };
     let dstenv = &mut envs[dstidx];
+    let idx = get_page_index_by_kvaddr(pa_to_kva(pa)).unwrap();
+    page_incref(idx);
     let result = dstenv
         .env_pgdir
         .map_va_to_pa(dstva, pa, dstenv.env_asid, 1, &flags, true);
-    let idx = get_page_index_by_kvaddr(pa_to_kva(pa)).unwrap();
-    page_incref(idx);
+
     if result.is_ok() {
         0
     } else {
+        page_decref(idx);
         -E_INVAL
     }
 }
@@ -224,7 +227,7 @@ fn sys_set_env_status(envid: usize, status: EnvStatus) -> i32 {
 
     if envs[idx].env_status != EnvStatus::Runnable && status == EnvStatus::Runnable {
         let mut env_sched_list = ENV_SCHED_LIST.lock();
-        env_sched_list.push(envs[idx].env_sched_link.clone());
+        env_sched_list.insert_to_tail(envs[idx].env_sched_link.clone());
     } else if envs[idx].env_status == EnvStatus::Runnable && status != EnvStatus::Runnable {
         let mut env_sched_list = ENV_SCHED_LIST.lock();
         env_sched_list.remove(envs[idx].env_sched_link.clone());
@@ -235,6 +238,7 @@ fn sys_set_env_status(envid: usize, status: EnvStatus) -> i32 {
 
 fn sys_set_trapframe(envid: usize, tf: *const Trapframe) -> i32 {
     if is_illegal_va_range((tf as usize).into(), size_of::<Trapframe>()) {
+        println!("sys_set_trapframe: invalid va: {:#x}", tf as usize );
         return -E_INVAL;
     }
     let idx = get_idx_by_envid(envid);
@@ -247,13 +251,13 @@ fn sys_set_trapframe(envid: usize, tf: *const Trapframe) -> i32 {
             } else {
                 VirtAddr::from(&stack_end as *const usize as usize - size_of::<Trapframe>())
                     .write::<Trapframe>(*tf);
+                println!("sys_set_trapframe: curenv: {:#x},tf is {:#x},returned {:#x}", curidx, tf as usize,(*tf).regs[2] as i32);
                 return (*tf).regs[2] as i32;
             }
         } else {
             panic!("sys_set_trapframe: no curenv");
         }
     }
-
     0
 }
 
@@ -338,13 +342,15 @@ fn sys_ipc_try_send(envid: usize, val: usize, srcva: VirtAddr, perm: Permssion) 
         return 0;
     }
     env.env_ipc_perm = perm | Permssion::PTE_V;
+    let idx = get_page_index_by_kvaddr(pa_to_kva(pa)).expect("sys_ipc_try_send: page_incref");
+    page_incref(idx);
     let result = env
         .env_pgdir
         .map_va_to_pa(env.env_ipc_dstva, pa, env.env_asid, 1, &perm, false);
-    page_incref(get_page_index_by_kvaddr(pa_to_kva(pa)).expect("sys_ipc_try_send: page_incref"));
     if result.is_ok() {
         0
     } else {
+        page_decref(idx);
         -E_INVAL
     }
 }

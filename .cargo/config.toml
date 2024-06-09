@@ -4,7 +4,7 @@ target = "./cfg/mips32.json"
 
 [target.mips32]
 rustflags = ["-C", "link-args=-Tld/mips32.ld"]
-runner = "qemu-system-mipsel -M malta -drive id=ide0,file=./target/fs.img,if=ide,format=raw -no-reboot -M malta -m 256M -nographic -kernel"
+runner = "qemu-system-mipsel -M malta -drive id=ide0,file=./target/fs.img,if=ide,format=raw -no-reboot -M malta -nographic -kernel"
 
 
 [unstable]

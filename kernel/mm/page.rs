@@ -41,7 +41,6 @@ impl Page {
 }
 
 lazy_static! {
-    #[repr(C,align(4096))]
     pub static ref PAGES: Spinlock<Vec<Page>> = Spinlock::new(Vec::new());
     static ref PAGE_LIST: Spinlock<DoubleLinkedList> = Spinlock::new(DoubleLinkedList::new());
 }
@@ -88,19 +87,11 @@ pub fn page_incref(pno: PageIndex) {
     let mut locked_pages = PAGES.lock();
     let page = &mut locked_pages[pno];
     page.p_ref += 1;
-
-    unsafe {
-        arch::asm!("sync");
-    }
 }
 
 pub fn page_decref(p: PageIndex) {
     let mut pages = PAGES.lock();
-
     pages[p].p_ref -= 1;
-    unsafe {
-        arch::asm!("sync");
-    }
     if pages[p].p_ref == 0 {
         let mut page_list = PAGE_LIST.lock();
         page_list.push(pages[p].p_link.clone());

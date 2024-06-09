@@ -99,7 +99,6 @@ int close(int fdnum) {
 	if ((r = fd_lookup(fdnum, &fd)) < 0 || (r = dev_lookup(fd->fd_dev_id, &dev)) < 0) {
 		return r;
 	}
-
 	r = (*dev->dev_close)(fd);
 	fd_close(fd);
 	return r;

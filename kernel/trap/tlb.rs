@@ -1,11 +1,16 @@
 use crate::{
     mm::{
-        addr::VirtAddr, page::page_alloc, pgtable::{Permssion, PgtableEntry}, KSEG0, PTMAP, UENVS, UPAGES, USTACKTOP, UTEMP, UTOP, UVPT, UXSTACKTOP
-    },   proc::{Env, CUR_ENV, ENV_LIST}, trap::trapframe
+        addr::VirtAddr,
+        page::page_alloc,
+        pgtable::{Permssion, PgtableEntry},
+        KSEG0, PTMAP, UENVS, UPAGES, USTACKTOP, UTEMP, UTOP, UVPT, UXSTACKTOP,
+    },
+    println,
+    proc::{Env, CUR_ENV, ENV_LIST},
+    trap::trapframe,
 };
 use core::{mem::size_of, ops::Add};
 use mips32::{cp0, Reg};
-
 
 pub(super) fn do_tlb_mod(trapframe: &mut trapframe::Trapframe) {
     let tmp_tf = VirtAddr::from(trapframe as *const trapframe::Trapframe as usize)
@@ -25,7 +30,9 @@ pub(super) fn do_tlb_mod(trapframe: &mut trapframe::Trapframe) {
     if curenv.env_user_tlb_mod_entry == 0 {
         panic!("TLB Mod but no user handler registered.");
     }
+    // println!("tf is {},the param tf is {:#x}",tmp_tf,trapframe as *const trapframe::Trapframe as usize);
     trapframe.regs[4] = trapframe.regs[29];
+    trapframe.regs[29] -= size_of::<usize>();
     trapframe.epc = curenv.env_user_tlb_mod_entry;
 }
 

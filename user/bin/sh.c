@@ -280,7 +280,7 @@ int main(int argc, char **argv) {
 			printf("\n$ ");
 		}
 		readline(buf, sizeof buf);
-
+		debugf("read commandline finished\n");
 		if (buf[0] == '#') {
 			continue;
 		}

@@ -2,6 +2,8 @@ use core::ops::{Add, BitAnd};
 
 use mips32::tlb::tlb_invalidate;
 
+use crate::println;
+
 use super::{
     addr::{PhysAddr, VirtAddr},
     page::{get_page_index_by_kvaddr, page_alloc, page_decref, PAGE_SHIFT, PAGE_SIZE},
@@ -87,7 +89,9 @@ impl Pgtable {
         reset: bool,
     ) -> Result<(), &'static str> {
         for i in 0..count {
-            let vpn = va.add(i << PAGE_SHIFT).get_vpn();
+            let tva = va.add(i << PAGE_SHIFT);
+            let tpa = pa.add(i << PAGE_SHIFT);
+            let vpn = tva.get_vpn();
             if !(self.entries[vpn >> 10] & Permssion::PTE_V) {
                 let (_, page_pa) = page_alloc().ok_or("No more pages")?;
                 self.entries[vpn >> 10].set(
@@ -99,20 +103,21 @@ impl Pgtable {
                 unsafe { &mut *(self.entries[vpn >> 10].kva().raw as *mut Pgtable) };
             if pgd.entries[vpn & 0x3ff] & Permssion::PTE_V {
                 if reset {
-                    let pg = pgd.entries[vpn & 0x3ff].kva();
                     page_decref(
-                        get_page_index_by_kvaddr(pg).expect("The mapped memory should be a page."),
+                        get_page_index_by_kvaddr(pgd.entries[vpn & 0x3ff].kva())
+                            .expect("The mapped memory should be a page."),
                     );
-                    tlb_invalidate(va.into(), asid);
+                    tlb_invalidate(tva.into(), asid);
                 } else {
                     return Err("Page already mapped");
                 }
             }
             pgd.entries[vpn & 0x3ff].set(
-                pa.add(i << PAGE_SHIFT).align_down(PAGE_SIZE),
+                tpa.align_down(PAGE_SIZE),
                 &(*flags | Permssion::PTE_V | Permssion::PTE_C_CACHEABLE),
             );
-            tlb_invalidate(va.into(), asid);
+            tlb_invalidate(tva.into(), asid);
+            println!("mapped va {:#x} to pa {:#x}", tva.raw, tpa.raw);
         }
         Ok(())
     }

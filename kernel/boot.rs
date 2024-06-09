@@ -27,7 +27,14 @@ elf::DEFINE_ELF_BYTES!(TEST2, "../target/user/bin/test2.b");
 elf::DEFINE_ELF_BYTES!(TEST3, "../target/user/bin/test3.b");
 elf::DEFINE_ELF_BYTES!(FKTEST, "../target/user/bin/fktest.b");
 elf::DEFINE_ELF_BYTES!(TEST4, "../target/user/bin/test4.b");
-
+elf::DEFINE_ELF_BYTES!(FSTEST, "../target/user/bin/fstest.b");
+elf::DEFINE_ELF_BYTES!(TESTBSS, "../target/user/bin/testbss.b");
+elf::DEFINE_ELF_BYTES!(PINGPING, "../target/user/bin/pingpong.b");
+elf::DEFINE_ELF_BYTES!(TESTPIPE, "../target/user/bin/testpipe.b");
+elf::DEFINE_ELF_BYTES!(TESTARG, "../target/user/bin/testarg.b");
+elf::DEFINE_ELF_BYTES!(DEVTST, "../target/user/bin/devtst.b");
+elf::DEFINE_ELF_BYTES!(NUM, "../target/user/bin/num.b");
+elf::DEFINE_ELF_BYTES!(TESTFDSHARING, "../target/user/bin/testfdsharing.b");
 #[no_mangle]
 #[link_section = ".text.boot"]
 extern "C" fn _init(mem_sz: usize) -> ! {
@@ -35,11 +42,18 @@ extern "C" fn _init(mem_sz: usize) -> ! {
     mm::mem_init(mem_sz);
     proc::env_init();
     // println!("creating user_icode");
-    proc::env_create(USER_ICODE, 1);
+    // proc::env_create(USER_ICODE, 1);
+    // proc::env_create(FSTEST, 1);
     // println!("creating fs_serv");
     // proc::env_create(TEST4, 1);
-    proc::env_create(FS_SERV, 1);
-
+    // proc::env_create(PINGPING, 1);
+    proc::env_create(TEST1, 1);
+    // proc::env_create(TESTARG, 1);
+    // proc::env_create(DEVTST, 1);
+    // proc::env_create(NUM, 1);
+    // proc::env_create(TESTFDSHARING, 1);
+    // proc::env_create(FS_SERV, 1);
+    // proc::env_create(TESTBSS, 1);
     sched::schedule(true);
     // never reach here,to let cheat the compiler
     // this function "will definitely be called"
