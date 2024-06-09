@@ -1,6 +1,8 @@
 #ifndef _TRAP_H_
 #define _TRAP_H_
 
+#ifndef __ASSEMBLER__
+
 #include <types.h>
 
 struct Trapframe
@@ -18,3 +20,5 @@ struct Trapframe
 };
 
 #endif /* !__ASSEMBLER__ */
+
+#endif /* _TRAP_H_ */

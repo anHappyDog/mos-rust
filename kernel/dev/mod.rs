@@ -1,11 +1,8 @@
-pub mod ide;
 pub mod uart;
-use crate::mm::KSEG1;
-use core::ptr;
-const MALTA_FPGA_HALT: usize = 0x1f000000 + 0x500;
+use crate::mm::addr::VirtAddr;
+const MALTA_FPGA_HALT: VirtAddr = VirtAddr::new(0xbf000000 + 0x500);
 
-pub fn halt() {
-    unsafe {
-        ptr::write_volatile((KSEG1 | MALTA_FPGA_HALT) as *mut u8, 0x42);
-    }
+pub fn halt() -> ! {
+    MALTA_FPGA_HALT.write_volatile(0x42);
+    unreachable!("halt failed.\n");
 }

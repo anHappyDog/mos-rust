@@ -22,7 +22,7 @@ int pageref(void *v) {
 	/* Step 2: Check the page table. */
 	pte = vpt[VPN(v)];
 
-	if (!(pte & (PTE_V | PTE_SWAP))) {
+	if (!(pte & PTE_V)) {
 		return 0;
 	}
 	/* Step 3: Return the result. */

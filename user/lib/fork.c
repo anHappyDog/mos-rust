@@ -14,17 +14,18 @@
  *    the faulting page at the same address.
  */
 /* ----- MOS EXERCISE 4 cow-entry AFTER sys-set-tlb-mod-entry BEGIN ----- */
-static void __attribute__((noreturn)) cow_entry(struct Trapframe *tf) {
+static void __attribute__((noreturn)) cow_entry(struct Trapframe *tf)
+{
 	u_int va = tf->cp0_badvaddr;
 	u_int perm;
-
 	/* Step 1: Find the 'perm' in which the faulting address 'va' is mapped. */
 	/* Hint: Use 'vpt' and 'VPN' to find the page table entry. If the 'perm' doesn't have
 	 * 'PTE_COW', launch a 'user_panic'. */
 	// ----- MOS BLANK BEGIN -----
 	perm = PTE_FLAGS(vpt[VPN(va)]);
-	if ((perm & PTE_COW) == 0) {
-		user_panic("PTE_COW not found, va=%08x, perm=%08x", va, perm);
+	if ((perm & PTE_COW) == 0)
+	{
+		user_panic("PTE_COW not found, va=%08x, perm=%08x,curenv is %08x", va, perm, env->env_id);
 	}
 	// ----- MOS BLANK END -----
 
@@ -53,10 +54,9 @@ static void __attribute__((noreturn)) cow_entry(struct Trapframe *tf) {
 	// ----- MOS BLANK BEGIN -----
 	syscall_mem_unmap(0, (void *)UCOW);
 	// ----- MOS BLANK END -----
-
 	// Step 7: Return to the faulting routine.
 	int r = syscall_set_trapframe(0, tf);
-	user_panic("syscall_set_trapframe returned %d", r);
+	user_panic("syscall_set_trapframe returned %08x", r);
 }
 /* ----- MOS EXERCISE END ----- */
 
@@ -82,7 +82,8 @@ static void __attribute__((noreturn)) cow_entry(struct Trapframe *tf) {
  *     'sys_mem_map' in kernel.
  */
 /* ----- MOS EXERCISE 4 duppage AFTER sys-exofork BEGIN ----- */
-static void duppage(u_int envid, u_int vpn) {
+static void duppage(u_int envid, u_int vpn)
+{
 	int r;
 	u_int addr;
 	u_int perm;
@@ -94,26 +95,29 @@ static void duppage(u_int envid, u_int vpn) {
 	perm = vpt[vpn] & ((1 << PGSHIFT) - 1);
 	// ----- MOS BLANK END -----
 
-	// syscall mem_map will invoke page_lookup
-	// page will be swapped in if needed in page_lookup
-	perm &= ~PTE_SWAP;
-
 	/* Step 2: If the page is writable, and not shared with children, and not marked as COW yet,
 	 * then map it as copy-on-write, both in the parent (0) and the child (envid). */
 	/* Hint: The page should be first mapped to the child before remapped in the parent. (Why?)
 	 */
 	// ----- MOS BLANK BEGIN -----
-	if ((perm & PTE_D) == 0 || (perm & PTE_LIBRARY) || (perm & PTE_COW)) {
-		if ((r = syscall_mem_map(0, (void *)addr, envid, (void *)addr, perm)) < 0) {
+	if ((perm & PTE_D) == 0 || (perm & PTE_LIBRARY) || (perm & PTE_COW))
+	{
+		if ((r = syscall_mem_map(0, (void *)addr, envid, (void *)addr, perm)) < 0)
+		{
 			user_panic("user panic mem map error: %d", r);
 		}
-	} else {
+	}
+	else
+	{
+		// debugf("in the duppage ,the syscall of the PTE_COW MAPP happened.,the perm is %08x,addr is %08x\n", (perm & ~PTE_D) | PTE_COW,addr);
 		if ((r = syscall_mem_map(0, (void *)addr, envid, (void *)addr,
-					 (perm & ~PTE_D) | PTE_COW)) < 0) {
+								 (perm & ~PTE_D) | PTE_COW)) < 0)
+		{
 			user_panic("user panic mem map error: %d", r);
 		}
 		if ((r = syscall_mem_map(0, (void *)addr, 0, (void *)addr,
-					 (perm & ~PTE_D) | PTE_COW)) < 0) {
+								 (perm & ~PTE_D) | PTE_COW)) < 0)
+		{
 			user_panic("user panic mem map error: %d", r);
 		}
 	}
@@ -133,12 +137,14 @@ static void duppage(u_int envid, u_int vpn) {
  *   Use 'syscall_set_tlb_mod_entry', 'syscall_getenvid', 'syscall_exofork',  and 'duppage'.
  */
 /* ----- MOS EXERCISE 4 fork AFTER sys-set-env-status BEGIN ----- */
-int fork(void) {
+int fork(void)
+{
 	u_int child;
 	u_int i;
 
 	/* Step 1: Set our TLB Mod user exception entry to 'cow_entry' if not done yet. */
-	if (env->env_user_tlb_mod_entry != (u_int)cow_entry) {
+	if (env->env_user_tlb_mod_entry != (u_int)cow_entry)
+	{
 		try(syscall_set_tlb_mod_entry(0, cow_entry));
 	}
 
@@ -146,7 +152,8 @@ int fork(void) {
 	// Hint: 'env' should always point to the current env itself, so we should fix it to the
 	// correct value.
 	child = syscall_exofork();
-	if (child == 0) {
+	if (child == 0)
+	{
 		env = envs + ENVX(syscall_getenvid());
 		return 0;
 	}
@@ -154,14 +161,19 @@ int fork(void) {
 	/* Step 3: Map all mapped pages below 'USTACKTOP' into the child's address space. */
 	// Hint: You should use 'duppage'.
 	// ----- MOS BLANK BEGIN -----
-	for (i = 0; i < PDX(UXSTACKTOP); i++) {
-		if (vpd[i] & PTE_V) {
-			for (u_int j = 0; j < PAGE_SIZE / sizeof(Pte); j++) {
+	for (i = 0; i < PDX(UXSTACKTOP); i++)
+	{
+		if (vpd[i] & PTE_V)
+		{
+			for (u_int j = 0; j < PAGE_SIZE / sizeof(Pte); j++)
+			{
 				u_long va = (i * (PAGE_SIZE / sizeof(Pte)) + j) << PGSHIFT;
-				if (va >= USTACKTOP) {
+				if (va >= USTACKTOP)
+				{
 					break;
 				}
-				if (vpt[VPN(va)] & (PTE_V | PTE_SWAP)) {
+				if (vpt[VPN(va)] & PTE_V)
+				{
 					duppage(child, VPN(va));
 				}
 			}

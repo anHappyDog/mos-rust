@@ -102,7 +102,6 @@ int open_alloc(struct Open **o) {
  */
 int open_lookup(u_int envid, u_int fileid, struct Open **po) {
 	struct Open *o;
-
 	if (fileid >= MAXOPEN) {
 		return -E_INVAL;
 	}
@@ -145,19 +144,16 @@ void serve_open(u_int envid, struct Fsreq_open *rq) {
 	struct Filefd *ff;
 	int r;
 	struct Open *o;
-
 	// Find a file id.
 	if ((r = open_alloc(&o)) < 0) {
 		ipc_send(envid, r, 0, 0);
 		return;
 	}
-
 	if ((rq->req_omode & O_CREAT) && (r = file_create(rq->req_path, &f)) < 0 &&
 	    r != -E_FILE_EXISTS) {
 		ipc_send(envid, r, 0, 0);
 		return;
 	}
-
 	// Open the file.
 	if ((r = file_open(rq->req_path, &f)) < 0) {
 		ipc_send(envid, r, 0, 0);
@@ -166,7 +162,6 @@ void serve_open(u_int envid, struct Fsreq_open *rq) {
 
 	// Save the file pointer.
 	o->o_file = f;
-
 	// If mode include O_TRUNC, set the file size to 0
 	if (rq->req_omode & O_TRUNC) {
 		if ((r = file_set_size(f, 0)) < 0) {
@@ -313,12 +308,10 @@ void serve_remove(u_int envid, struct Fsreq_remove *rq) {
 void serve_dirty(u_int envid, struct Fsreq_dirty *rq) {
 	struct Open *pOpen;
 	int r;
-
 	if ((r = open_lookup(envid, rq->req_fileid, &pOpen)) < 0) {
 		ipc_send(envid, r, 0, 0);
 		return;
 	}
-
 	if ((r = file_dirty(pOpen->o_file, rq->req_offset)) < 0) {
 		ipc_send(envid, r, 0, 0);
 		return;
@@ -361,7 +354,6 @@ void *serve_table[MAX_FSREQNO] = {
 void serve(void) {
 	u_int req, whom, perm;
 	void (*func)(u_int, u_int);
-
 	for (;;) {
 		perm = 0;
 
@@ -379,7 +371,6 @@ void serve(void) {
 			panic_on(syscall_mem_unmap(0, (void *)REQVA));
 			continue;
 		}
-
 		// Select the serve function and call it.
 		func = serve_table[req];
 		func(whom, REQVA);

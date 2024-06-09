@@ -11,6 +11,10 @@ mips32 = { path = "./lib/mips32" }
 elf = { path = "./lib/elf" }
 sync = { path = "./lib/sync" }
 alloc_macro = { path = "./lib/alloc_macro" }
+lazy_static = { version = "1.4.0", default-features = false, features = [
+
+    "spin_no_std",
+] }
 
 [build-dependencies]
 cc = "1.0.98"
@@ -26,6 +30,11 @@ lto = true
 
 [profile.dev]
 lto = false
+opt-level = 0
 codegen-units = 1
 debug = true
 panic = "abort"
+
+[features]
+default = ["fit-cmos"]
+fit-cmos = []
