@@ -1,7 +1,6 @@
 # MOS_WITH_RUST
 
-为什么会有 RUST,就像为什么 RUST 会是 RUST 一样。
-
+为什么会有 RUST,就像为什么 RUST 会是 RUST 一样。这是使用RUST编写的MIPS内核，具有简单的内存管理和异常处理，可以调度并执行C用户态程序，最后通过Shell与用户交互。
 ## 编译
 
 ```shell
